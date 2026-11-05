@@ -1,0 +1,107 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - Chemical Lookup{% endblock %}
+
+{% block content %}
+<h1>Chemical lookup</h1>
+<p class="tagline">
+    Match one or more chemicals to information in CORE and download a report.
+    Every submitted row appears in the results, including chemicals with no match.
+</p>
+<p>
+    Lookups use exact matches against identifiers, stored names, and structure
+    records in CORE. This tool does not send searches to external providers.
+</p>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="stats-box" role="alert">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<section style="max-width: 900px; margin: 24px auto; padding: 24px; background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius);">
+    <h2>Enter chemicals</h2>
+    <p>Paste tabular rows or upload a CSV, TSV, or Excel file. You will map identifier columns on the next step.</p>
+
+    <form method="post" enctype="multipart/form-data" id="lookup-input-form">
+        {% csrf_token %}
+        <fieldset style="border: 0; padding: 0; margin: 0 0 20px;">
+            <legend style="font-weight: 600; margin-bottom: 10px;">Input method</legend>
+            <label style="margin-right: 18px;">
+                <input type="radio" name="source_mode" value="paste" checked>
+                Paste rows
+            </label>
+            <label>
+                <input type="radio" name="source_mode" value="file">
+                Upload a file
+            </label>
+        </fieldset>
+
+        <div id="paste-input">
+            <label for="pasted_rows" style="display: block; font-weight: 600;">Chemical rows</label>
+            <textarea id="pasted_rows" name="pasted_rows" rows="9"
+                placeholder="One chemical per row, or multiple identifier columns separated by commas or tabs&#10;DTXSIDBLAHBLAH,C(=O)CCS,765-18-2"
+                style="width: 100%; box-sizing: border-box; padding: 12px; margin: 8px 0 14px; font-family: monospace;"></textarea>
+            <label for="delimiter">Column separator</label>
+            <select id="delimiter" name="delimiter">
+                <option value="auto" selected>Detect automatically</option>
+                <option value=",">Comma</option>
+                <option value="&#9;">Tab</option>
+                <option value=";">Semicolon</option>
+            </select>
+            <label style="display: block; margin-top: 10px;">
+                <input type="checkbox" name="paste_has_headers">
+                First pasted row contains column headings
+            </label>
+        </div>
+
+        <div id="file-input" hidden>
+            <label for="input_file" style="display: block; font-weight: 600;">CSV, TSV, or Excel file</label>
+            <input id="input_file" name="input_file" type="file" accept=".csv,.tsv,.xlsx,.xls"
+                style="display: block; margin: 8px 0 14px;">
+            <label style="display: block;">
+                <input type="checkbox" name="file_has_headers" checked>
+                First file row contains column headings
+            </label>
+            <label for="file_delimiter" style="display: block; margin-top: 12px;">CSV/TSV separator</label>
+            <select id="file_delimiter" name="delimiter">
+                <option value="auto" selected>Detect automatically</option>
+                <option value=",">Comma</option>
+                <option value="&#9;">Tab</option>
+                <option value=";">Semicolon</option>
+            </select>
+            <p style="color: var(--text-muted);">Maximum file size: 10 MB. Uploads are stored privately and removed after download or expiry.</p>
+        </div>
+
+        <button class="btn" type="submit">Review columns and choose report data</button>
+    </form>
+</section>
+
+<script>
+(() => {
+    const form = document.getElementById('lookup-input-form');
+    const paste = document.getElementById('paste-input');
+    const file = document.getElementById('file-input');
+    const radios = form.querySelectorAll('input[name="source_mode"]');
+    const pasteText = document.getElementById('pasted_rows');
+    const fileInput = document.getElementById('input_file');
+    const pasteDelimiter = document.getElementById('delimiter');
+    const fileDelimiter = document.getElementById('file_delimiter');
+
+    function updateMode() {
+        const isFile = form.querySelector('input[name="source_mode"]:checked').value === 'file';
+        paste.hidden = isFile;
+        file.hidden = !isFile;
+        pasteText.required = !isFile;
+        fileInput.required = isFile;
+        pasteText.disabled = isFile;
+        fileInput.disabled = !isFile;
+        pasteDelimiter.disabled = isFile;
+        fileDelimiter.disabled = !isFile;
+    }
+
+    radios.forEach((radio) => radio.addEventListener('change', updateMode));
+    updateMode();
+})();
+</script>
+{% endblock %}

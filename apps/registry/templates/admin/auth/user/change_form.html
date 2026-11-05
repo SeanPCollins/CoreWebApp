@@ -1,0 +1,12 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+    {% if original %}
+        <li>
+            <a href="{% url 'admin:auth_user_send_password_reset' original.pk %}">
+                Send password reset link
+            </a>
+        </li>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Data Gathering - CORE{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 40px auto; padding: 32px; background: #fff; border: 1px solid var(--border-color); border-radius: 10px;">
+    <h2>Data Gathering</h2>
+    <p style="color: var(--text-muted);">Queue provider jobs, monitor task progress, and manage active runs.</p>
+    <p><a href="{% url 'admin:registry_searchtermreview_changelist' %}">Review user-submitted search terms</a></p>
+
+    {% if messages %}
+    <div style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <div style="padding: 12px 16px; margin-bottom: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; font-size: 0.9rem;">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin-bottom: 28px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="run">
+        <h3 style="margin: 0 0 16px; font-size: 1.1rem;">Queue Provider Jobs</h3>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: end;">
+            <label style="font-size: 0.9rem; font-weight: 600; color: #334155;">
+                Provider
+                <select name="provider_filter" style="display: block; min-width: 240px; padding: 8px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 4px; background: white;">
+                    <option value="all_active">All active providers</option>
+                    <option value="all_except_chemspider">All active providers except ChemSpider</option>
+                    {% for source in source_stats %}
+                        {% if source.is_active %}
+                        <option value="{{ source.provider_code }}">{{ source.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label style="font-size: 0.9rem; font-weight: 600; color: #334155;">
+                Tasks per batch
+                <input type="number" name="batch_size" value="50" min="1" max="500" required style="display: block; width: 110px; padding: 8px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+            </label>
+            <label style="font-size: 0.9rem; font-weight: 600; color: #334155;">
+                Maximum tasks (optional)
+                <input type="number" name="max_tasks" min="1" max="100000"
+                    placeholder="No limit"
+                    style="display: block; width: 140px; padding: 8px; margin-top: 5px;
+                            border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; max-width: 290px; font-size: 0.85rem; color: #92400e;">
+                <input type="checkbox" name="force_chemspider_small_batches" value="on">
+                Force ChemSpider detail batches below 50 IDs (may use more API quota)
+            </label>
+            <label style="font-size: 0.9rem; font-weight: 600; color: #334155;">
+                Maximum runtime (minutes)
+                <input type="number" name="max_runtime_minutes" value="360" min="1" max="1440" required style="display: block; width: 150px; padding: 8px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+            </label>
+
+            <label style="font-size: 0.9rem; font-weight: 600; color: #334155;">
+                Run at (local time)
+                <input type="datetime-local" name="scheduled_for" style="display: block; padding: 8px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+            </label>
+
+            <button type="submit" style="background: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600;">Queue selected jobs</button>
+        </div>
+        <p style="margin: 12px 0 0; color: #64748b; font-size: 0.8rem;">Leave “Run at” blank to start as soon as possible. Otherwise choose a future local date and time ({{ display_timezone }}). Celery Beat dispatches due runs, typically within 30 seconds. A provider can have only one scheduled or running job at a time.</p>
+        <p style="margin: 8px 0 0; color: #92400e; font-size: 0.8rem;">ChemSpider detail lookups normally require at least 50 eligible IDs in one batch. Use the override only when you want to spend API quota on a smaller detail batch; the override applies only to ChemSpider and is saved with each run.</p>
+        <p style="margin: 8px 0 0; color: #64748b; font-size: 0.8rem;">CAS Common requests are paced at about one request every 1.5 seconds. If CAS rate-limits a run, CORE backs off progressively and honors a longer Retry-After value when CAS provides one.</p>
+    </form>
+
+    <div id="dashboard-live-content">
+        {% include 'core/partials/data_gathering_status.html' %}
+    </div>
+    <p id="dashboard-last-updated" style="margin: 12px 0 0; color: #94a3b8; font-size: 0.75rem; text-align: right;" aria-live="polite"></p>
+</div>
+
+<script>
+(() => {
+    const statusUrl = "{% url 'data_gathering_status' %}";
+    const liveContent = document.getElementById('dashboard-live-content');
+    const updatedLabel = document.getElementById('dashboard-last-updated');
+    let refreshTimer = null;
+    let activeRefreshInterval = null;
+    let requestInFlight = false;
+
+    function updateRefreshTimer() {
+        const status = liveContent.firstElementChild;
+        const hasActiveWork = status?.dataset.hasActiveWork === 'true';
+        const refreshInterval = Number(status?.dataset.refreshInterval) || 30000;
+        if (!hasActiveWork && refreshTimer !== null) {
+            window.clearInterval(refreshTimer);
+            refreshTimer = null;
+            activeRefreshInterval = null;
+        } else if (hasActiveWork && refreshInterval !== activeRefreshInterval) {
+            if (refreshTimer !== null) window.clearInterval(refreshTimer);
+            activeRefreshInterval = refreshInterval;
+            refreshTimer = window.setInterval(refreshStatus, refreshInterval);
+        }
+    }
+
+    async function refreshStatus() {
+        if (requestInFlight) return;
+        requestInFlight = true;
+        try {
+            const response = await fetch(statusUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                cache: 'no-store',
+                credentials: 'same-origin'
+            });
+            if (!response.ok) {
+                throw new Error(`Status refresh failed (${response.status}).`);
+            }
+            liveContent.innerHTML = await response.text();
+            updatedLabel.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+            updateRefreshTimer();
+        } catch (error) {
+            console.error('Could not refresh data-gathering status:', error);
+        } finally {
+            requestInFlight = false;
+        }
+    }
+
+    updateRefreshTimer();
+})();
+</script>
+{% endblock %}

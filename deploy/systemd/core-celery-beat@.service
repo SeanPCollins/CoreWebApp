@@ -1,0 +1,17 @@
+[Unit]
+Description=Celery beat for %i (dispatches due data-gathering runs)
+After=network-online.target redis-server.service postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scollins
+Group=users
+WorkingDirectory=/opt/esrab-apps/core/%i
+# Run exactly one beat per broker DB; dev and prod must use different CELERY_BROKER_URL values.
+ExecStart=/opt/esrab-apps/core/%i/.venv/bin/celery -A config beat --loglevel=info
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

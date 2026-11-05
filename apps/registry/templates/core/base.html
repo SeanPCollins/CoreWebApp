@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}CORE - Chemical Organization & Research Engine{% endblock %}</title>
+    <!-- Font Awesome CDN for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #334155;
+            --text-heading: #0f172a;
+            --text-muted: #64748b;
+            --primary: #334155;
+            --primary-hover: #1e293b;
+            --accent: #0d9488;
+            --accent-hover: #0f766e;
+            --border-color: #e2e8f0;
+            --radius: 8px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Modern Full-Width Header Bar */
+        .site-header {
+            background-color: #0f172a;
+            border-bottom: 1px solid #1e293b;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+
+        .nav-brand {
+            font-weight: 700;
+            color: #f8fafc;
+            text-decoration: none;
+            font-size: 1.35rem;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-brand i {
+            color: #2dd4bf; /* Soft teal network/data icon */
+        }
+
+        .nav-left, .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Clean Tab/Link Styling */
+        .nav-link {
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: var(--radius);
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .nav-link:hover {
+            background-color: #1e293b;
+            color: #f8fafc;
+        }
+
+        /* Specific style for Log In / Sign Up pill buttons when logged out */
+        .site-header .btn-header-outline {
+            border: 1px solid #475569;
+            background: transparent;
+            color: #ffffff !important;
+        }
+
+        /* Modern Hover Dropdown Styling */
+        .nav-dropdown {
+            position: relative;
+            display: inline-block;
+            padding-bottom: 5px;
+            margin-bottom: -5px;
+        }
+
+        /* Account / Name Button Styling - Logged In */
+        .nav-dropbtn {
+            background: transparent;
+            color: #ffffff !important;
+            border: 1px solid #475569;
+            padding: 8px 14px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        .nav-dropbtn:hover {
+            background-color: #1e293b;
+            color: #ffffff;
+            border-color: #94a3b8;
+        }
+
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: #1e293b;
+            min-width: 240px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #334155;
+            border-radius: var(--radius);
+            z-index: 100;
+            overflow: hidden;
+            padding: 6px 0;
+            margin-top: 0px;
+        }
+
+        /* Expanded hover bridge that captures mouse movement seamlessly */
+        .nav-dropdown-content::before {
+            content: "";
+            position: absolute;
+            top: -15px;
+            left: 0;
+            width: 100%;
+            height: 15px;
+        }
+
+        .nav-dropdown-content a,
+        .nav-dropdown-content button {
+            color: #cbd5e1;
+            padding: 10px 16px;
+            text-decoration: none;
+            display: block;
+            text-align: left;
+            width: 100%;
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.1s ease;
+        }
+
+        .nav-dropdown-content a:hover,
+        .nav-dropdown-content button:hover {
+            background-color: #334155;
+            color: #2dd4bf;
+        }
+
+        .nav-dropdown:hover .nav-dropdown-content {
+            display: block;
+        }
+
+        /* Main Page Content Wrapper */
+        .main-container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+
+        .content-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+        }
+
+        h1 {
+            color: var(--text-heading);
+            margin-top: 0;
+            font-size: 2rem;
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            color: var(--text-heading);
+            font-size: 1.5rem;
+            letter-spacing: -0.3px;
+        }
+
+        .tagline {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+
+        /* Soft Teal Data Callout Box (Low Strain) */
+        .stats-box {
+            background: #f0fdfa;
+            border-left: 4px solid var(--accent);
+            color: #115e59;
+            padding: 16px 20px;
+            border-radius: var(--radius);
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+        }
+
+        .btn {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 10px 20px;
+            border-radius: var(--radius);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            color: var(--text-heading);
+        }
+
+        .page-footer {
+            margin-top: 40px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+    </style>
+    {% block style %}{% endblock style %}
+</head>
+<body>
+
+    <!-- Full-Width Modern Header Bar -->
+    <header class="site-header">
+        <div class="header-inner">
+            <!-- Left: Brand + Navigation Links -->
+            <div class="nav-left">
+                <a href="{% url 'home' %}" class="nav-brand">
+                    <i class="fas fa-project-diagram text-primary me-2"></i>
+                    <span class="fw-bold">CORE</span>
+                </a>
+                <nav style="display: flex; gap: 4px; margin-left: 20px;">
+                    <a href="{% url 'home' %}" class="nav-link">Home</a>
+                    <a href="{% url 'search' %}" class="nav-link">Search</a>
+                    <a href="{% url 'description' %}" class="nav-link">Description</a>
+                    <a href="{% url 'changelog' %}" class="nav-link">Changelog</a>
+                    <a href="{% url 'contact' %}" class="nav-link">Contact</a>
+                </nav>
+            </div>
+
+            <!-- Right: Apps & User Account Dropdowns -->
+            <div class="nav-right">
+                <!-- Apps Hover Dropdown -->
+                <div class="nav-dropdown">
+                    <button type="button" class="nav-dropbtn">
+                        Apps ▾
+                    </button>
+                    <div class="nav-dropdown-content">
+                        <a href="https://esrab-berse.ca/hals-dev/" target="_blank">HALS</a>
+                        <a href="https://hecsb.hres.ca/ingat/" target="_blank">InGaT</a>
+                        <a href="https://hecsb.hres.ca/kibana/" target="_blank">Kibana</a>
+                        <a href="https://hecsb.hres.ca/nsn_search/" target="_blank">NSN Search</a>
+                        <a href="https://exposure.chemistrycompass.com" target="_blank">Occupational Exposure Search</a>
+                        <a href="https://hecsb.hres.ca/raft/" target="_blank">RaFT</a>
+                        <a href="https://hecsb.hres.ca/rdgs/" target="_blank">RiDGS</a>
+                        <a href="https://hecsb.hres.ca/assessment-search/" target="_blank">Assessment Search</a>
+                        <a href="https://hecsb.hres.ca/sdsst/" target="_blank">SDSST</a>
+                    </div>
+                </div>
+
+                <!-- Account Hover Dropdown -->
+                <div class="nav-dropdown">
+                    {% if request.user.is_authenticated %}
+                        <button type="button" class="nav-dropbtn" style="font-weight: 600;">
+                            <span class="user-avatar-icon">
+                                <i class="fa-solid fa-user-circle" style="font-size: 1.15rem; color: #2dd4bf;"></i>
+                            </span>
+                            {{ request.user.get_full_name|default:request.user.username }} ▾
+                        </button>
+                        <div class="nav-dropdown-content">
+                            <a href="{% url 'account_details' %}">
+                                <i class="fa-solid fa-gear" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> My Account
+                            </a>
+                            <!-- Staff data tools -->
+                            {% if request.user.is_staff %}
+                            <a href="{% url 'instructions' %}">
+                                <i class="fa-solid fa-circle-info" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Staff Instructions
+                            </a>
+                            <a href="{% url 'import_upload' %}">
+                                <i class="fa-solid fa-file-arrow-up" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Import Data
+                            </a>
+                            <a href="{% url 'data_gathering' %}">
+                                <i class="fa-solid fa-gears" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Data Gathering
+                            </a>
+                            <a href="{% url 'structure_curation' %}">
+                                <i class="fa-solid fa-network-wired" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Structure Curation
+                            </a>
+                            {% endif %}
+                            <form action="{% url 'logout' %}" method="post" style="margin: 0;" id="sign-out-form">
+                                {% csrf_token %}
+                                <button type="submit">
+                                    <i class="fa-solid fa-right-from-bracket" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Sign Out
+                                </button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <button type="button" class="nav-dropbtn">
+                            <i class="fa-solid fa-user" style="font-size: 0.95rem;"></i> Account ▾
+                        </button>
+                        <div class="nav-dropdown-content">
+                            <a href="{% url 'login' %}">
+                                <i class="fa-solid fa-right-to-bracket" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Log In
+                            </a>
+                            <a href="{% url 'signup' %}">
+                                <i class="fa-solid fa-user-plus" style="margin-right: 8px; width: 16px; color: var(--text-muted);"></i> Sign Up
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Card Wrapper -->
+    <main class="main-container">
+        <div class="content-card">
+            <!-- Dynamic Page Content -->
+            {% block content %}
+            {% endblock %}
+
+            <!-- Bottom Right Admin Panel (Superuser Only) -->
+            {% if request.user.is_authenticated and request.user.is_superuser %}
+                <div class="page-footer">
+                    <a href="{% url 'admin:index' %}" class="btn">Admin Panel</a>
+                </div>
+            {% endif %}
+        </div>
+    </main>
+
+    {% block script %}{% endblock script %}
+</body>
+</html>

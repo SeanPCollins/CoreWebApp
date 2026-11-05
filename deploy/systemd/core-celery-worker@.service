@@ -1,0 +1,20 @@
+[Unit]
+Description=Celery worker for %i (data-gathering runs)
+After=network-online.target redis-server.service postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scollins
+Group=users
+# %i is the checkout directory name, e.g. core-dev or core-prod.
+WorkingDirectory=/opt/esrab-apps/core/%i
+ExecStart=/opt/esrab-apps/core/%i/.venv/bin/celery -A config worker --loglevel=info -Q registry,celery
+# SIGTERM starts a warm shutdown so in-flight batches can finish.
+KillSignal=SIGTERM
+TimeoutStopSec=300
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,147 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div id="content-main" style="padding: 20px;">
+    <h1>Exploratory Findings Inspector</h1>
+    <p>Select a finding below from any provider group to inspect its data structure and test extraction safely.</p>
+
+    <div style="display: flex; gap: 20px; margin-top: 20px;">
+        <!-- Left Pane: Grouped Category Navigation -->
+        <div style="flex: 1; background: #fff; padding: 15px; border: 1px solid #ccc; height: 750px; overflow-y: auto;">
+            <h3>Findings Categories</h3>
+            <p style="font-size: 12px; color: #666;">Filter queue by data type and provider.</p>
+            
+            <ul style="list-style: none; padding: 0; margin-top: 10px;">
+                <li style="margin-bottom: 12px;">
+                    <a href="{% url 'exploratory_inspector' %}" style="text-decoration: none; font-weight: {% if not selected_group %}bold{% else %}normal{% endif %};">
+                        📂 All Categories (1,009 total)
+                    </a>
+                </li>
+                
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+
+                {% for g in groups %}
+                {% with source=g.search_task__web_source__name rep=g.search_task__target_representation %}
+                <li style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
+                    <a href="?group={{ source|urlencode }}|{{ rep|urlencode }}" 
+                       style="text-decoration: none; color: #333; display: block;">
+                        <strong>{{ source }}</strong><br>
+                        <span style="color: #666; font-size: 11px;">Rep: <code>{{ rep }}</code> ({{ g.count }} records)</span>
+                        
+                        {% if rep == 'detail' or rep == 'pug_view' %}
+                            <span style="color: #2e7d32; font-size: 10px; display: block; font-weight: bold;">[Actionable Target Payload]</span>
+                        {% else %}
+                            <span style="color: #d32f2f; font-size: 10px; display: block;">[Search Stub / Index]</span>
+                        {% endif %}
+                    </a>
+                </li>
+                {% endwith %}
+                {% endfor %}
+            </ul>
+
+            <hr style="margin: 15px 0;">
+            
+            <h4>Filtered Queue (Showing up to 100)</h4>
+            <ul style="list-style: none; padding: 0;">
+                {% for finding in findings %}
+                <li style="padding: 8px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 12px;" onclick="fetchFinding('{{ finding.pk }}')">
+                    <strong>Term:</strong> {{ finding.search_task.search_term.term_value|default:"Unknown" }}<br>
+                    <small style="color: #666;">{{ finding.search_task.web_source.name }} | {{ finding.search_task.target_representation }}</small>
+                </li>
+                {% empty %}
+                <li>No findings in this view.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Right Pane: Payload Structure & Raw Inspector -->
+        <div style="flex: 2; background: #fff; padding: 20px; border: 1px solid #ccc; height: 750px; overflow-y: auto;">
+            <h3 id="panel-title">Payload Inspector</h3>
+            <div id="loading-indicator" style="display: none; color: #0066cc; font-weight: bold; margin-bottom: 10px;">Loading large payload...</div>
+
+            <div id="finding-meta" style="margin-bottom: 15px; font-size: 13px; color: #444;"></div>
+
+            <!-- Top-Level Key Breakdown -->
+            <h4>Payload Data Map (Top-Level Keys)</h4>
+            <div id="key-structure-view" style="background: #f4f6f8; padding: 10px; border: 1px solid #ddd; margin-bottom: 15px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
+                Select a finding to view its structural map.
+            </div>
+
+            <!-- Sandbox Test Area -->
+            <div style="margin-bottom: 15px;">
+                <h4>Trial Extraction Sandbox</h4>
+                <button onclick="runTrialExtraction()" style="padding: 6px 12px; background: #79aec8; color: white; border: none; cursor: pointer; border-radius: 4px;">Test Structure Extraction</button>
+                <pre id="extraction-output" style="background: #f8f8f8; padding: 10px; margin-top: 8px; border: 1px solid #ddd; font-size: 12px; min-height: 50px;"></pre>
+            </div>
+
+            <!-- Raw JSON Toggle -->
+            <div>
+                <button onclick="toggleRawJson()" style="padding: 4px 8px; font-size: 11px; cursor: pointer;">Toggle Raw JSON View</button>
+                <textarea id="payload-display" style="width: 100%; height: 250px; font-family: monospace; font-size: 11px; margin-top: 8px; display: none;" readonly></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let activePayloadData = null;
+
+function fetchFinding(pk) {
+    document.getElementById('loading-indicator').style.display = 'block';
+    document.getElementById('panel-title').innerText = 'Loading Finding ' + pk + '...';
+
+    fetch("{% url 'exploratory_inspector' %}api/" + pk + "/")
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('loading-indicator').style.display = 'none';
+            document.getElementById('panel-title').innerText = 'Inspecting: ' + data.source_url;
+            document.getElementById('finding-meta').innerHTML = `
+                <strong>Created:</strong> ${data.created_at} | 
+                <strong>Size:</strong> ${(data.payload_size_chars / 1024).toFixed(1)} KB
+            `;
+
+            activePayloadData = data.full_payload;
+            document.getElementById('payload-display').value = JSON.stringify(activePayloadData, null, 2);
+            document.getElementById('key-structure-view').innerText = JSON.stringify(data.key_structure, null, 2);
+            document.getElementById('extraction-output').innerText = 'Ready to test extraction.';
+        })
+        .catch(err => {
+            document.getElementById('loading-indicator').style.display = 'none';
+            alert('Error loading payload: ' + err);
+        });
+}
+
+function toggleRawJson() {
+    let ta = document.getElementById('payload-display');
+    ta.style.display = ta.style.display === 'none' ? 'block' : 'none';
+}
+
+function runTrialExtraction() {
+    if (!activePayloadData) {
+        alert('Please select a finding first.');
+        return;
+    }
+
+    // Generic exploratory sandbox check across nested structures
+    let extracted = {
+        detected_inchikey: chemart_search(activePayloadData, 'inchikey') || chemart_search(activePayloadData, 'InChIKey') || "Not found",
+        detected_smiles: chemart_search(activePayloadData, 'smiles') || chemart_search(activePayloadData, 'SMILES') || "Not found",
+        detected_formula: chemart_search(activePayloadData, 'molFormula') || chemart_search(activePayloadData, 'molecularFormula') || "Not found"
+    };
+
+    document.getElementById('extraction-output').innerText = JSON.stringify(extracted, null, 2);
+}
+
+// Recursive helper to scan any provider JSON schema for identifiers
+function chemart_search(obj, key) {
+    if (obj !== null && typeof obj === 'object') {
+        if (key in obj) return obj[key];
+        for (let k in obj) {
+            let res = chemart_search(obj[k], key);
+            if (res) return res;
+        }
+    }
+    return null;
+}
+</script>
+{% endblock %}

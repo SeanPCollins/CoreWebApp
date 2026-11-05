@@ -1,0 +1,81 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - Home{% endblock %}
+
+{% block content %}
+    <style>
+        .home-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin: 24px 0 38px; }
+        .home-stat { --stat-color: #0f766e; --stat-tint: #f0fdfa; position: relative; overflow: hidden; min-height: 150px; padding: 21px; border: 1px solid rgba(15, 23, 42, .08); border-radius: 14px; background: linear-gradient(145deg, #fff 20%, var(--stat-tint)); box-shadow: 0 5px 16px rgba(15, 23, 42, .06); transition: transform .18s ease, box-shadow .18s ease; }
+        .home-stat::before { position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--stat-color); content: ""; }
+        .home-stat:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(15, 23, 42, .1); }
+        .home-stat-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .home-stat strong { display: block; color: var(--stat-color); font-size: clamp(2rem, 4vw, 2.6rem); font-variant-numeric: tabular-nums; line-height: 1.1; }
+        .home-stat-icon { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 12px; background: var(--stat-tint); color: var(--stat-color); font-size: 1.1rem; }
+        .home-stat span { display: block; margin-top: 15px; color: var(--text-muted); font-size: .92rem; font-weight: 600; }
+        .home-stat-blue { --stat-color: #2563eb; --stat-tint: #eff6ff; }
+        .home-stat-violet { --stat-color: #7c3aed; --stat-tint: #f5f3ff; }
+        .home-stat-green { --stat-color: #15803d; --stat-tint: #f0fdf4; }
+        .home-stat-amber { --stat-color: #b45309; --stat-tint: #fffbeb; }
+        @media (prefers-reduced-motion: reduce) { .home-stat { transition: none; } .home-stat:hover { transform: none; } }
+        @media (max-width: 520px) { .home-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .home-stat { min-height: 132px; padding: 16px 14px; } .home-stat-icon { width: 36px; height: 36px; flex-basis: 36px; } }
+        @media (max-width: 360px) { .home-stats { grid-template-columns: 1fr; } }
+    </style>
+    <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 28px;">
+        <div style="background: #f0fdfa; border: 1px solid #ccfbf1; padding: 18px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-project-diagram" style="font-size: 2.2rem; color: #0d9488;"></i>
+        </div>
+        <div>
+            <h1 style="margin-bottom: 4px;">Chemical Organization & Research Engine</h1>
+            <p class="tagline">Centralized chemical data gathering, identifier mapping, and data indexing.</p>
+        </div>
+    </div>
+
+    <p style="color: var(--text-main); line-height: 1.6; font-size: 1.05rem; margin-bottom: 30px;">
+        Welcome to CORE. This platform gathers and organizes chemical information from disparate data sources, external identifiers, and chemical structures in a unified searchable database.
+    </p>
+
+    <section aria-labelledby="database-stats-heading">
+        <h2 id="database-stats-heading" style="margin-bottom: 14px;">CORE at a glance</h2>
+        <div class="home-stats">
+            <div class="home-stat home-stat-blue">
+                <div class="home-stat-top">
+                    <strong>{{ database_stats.search_terms }}</strong>
+                    <span class="home-stat-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
+                </div>
+                <span>Search terms indexed</span>
+            </div>
+            <div class="home-stat home-stat-violet">
+                <div class="home-stat-top">
+                    <strong>{{ database_stats.search_tasks }}</strong>
+                    <span class="home-stat-icon" aria-hidden="true"><i class="fa-solid fa-list-check"></i></span>
+                </div>
+                <span>Provider search tasks</span>
+            </div>
+            <div class="home-stat home-stat-green">
+                <div class="home-stat-top">
+                    <strong>{{ database_stats.successful_tasks }}</strong>
+                    <span class="home-stat-icon" aria-hidden="true"><i class="fa-solid fa-circle-check"></i></span>
+                </div>
+                <span>Successful provider searches</span>
+            </div>
+            <div class="home-stat home-stat-amber">
+                <div class="home-stat-top">
+                    <strong>{{ database_stats.unique_structures }}</strong>
+                    <span class="home-stat-icon" aria-hidden="true"><i class="fa-solid fa-atom"></i></span>
+                </div>
+                <span>Unique chemical structures</span>
+            </div>
+        </div>
+    </section>
+
+    {% if not user.is_authenticated %}
+        <div style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 10px; padding: 24px; margin-top: 20px;">
+            <h3 style="margin-top: 0; margin-bottom: 8px; color: var(--text-heading); font-size: 1.15rem;">Access the System</h3>
+            <p style="color: var(--text-muted); margin-bottom: 18px; font-size: 0.95rem;">Please log in with your credentials or request an account to access chemical data gathering and search functionality.</p>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <a href="{% url 'login' %}" class="btn">Log In</a>
+                <a href="{% url 'signup' %}" class="btn btn-secondary">Request Account</a>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

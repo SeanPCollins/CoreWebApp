@@ -1,0 +1,39 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - My Saved Queries{% endblock %}
+
+{% block content %}
+    <h1>Saved Queries</h1>
+    <p class="tagline">Manage and reload your frequently used chemical filter configurations.</p>
+
+    {% if queries %}
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+            {% for q in queries %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius);">
+                    <div>
+                        <strong style="font-size: 1.05rem; color: var(--text-main);">{{ q.name }}</strong>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+                            Saved on {{ q.created_at|date:"F j, Y, g:i a" }}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <!-- Reload query back into search page -->
+                        <a href="{% url 'search' %}?saved_query_id={{ q.id }}" class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 12px;">
+                            Load Query
+                        </a>
+                        <!-- Delete saved query -->
+                        <form method="post" style="margin: 0;">
+                            {% csrf_token %}
+                            <input type="hidden" name="delete_id" value="{{ q.id }}">
+                            <button type="submit" class="btn" style="background: #ef4444; font-size: 0.85rem; padding: 6px 12px;">
+                                Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: var(--text-muted); font-style: italic; margin-top: 20px;">You haven't saved any queries yet. Visit the search page to save your filter setups.</p>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,47 @@
+<form method="post">
+    {% csrf_token %}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Include</th>
+                <th>Raw Input / Source</th>
+                <th>Mapped Chemical Name</th>
+                <th>CAS RN</th>
+                <th>Canonical SMILES / Structure</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in staged_batch %}
+            <tr>
+                <td>
+                    <input type="checkbox" name="include_{{ item.temp_id }}" {% if item.user_approved %}checked{% endif %}>
+                </td>
+                <td><code>{{ item.raw_input }}</code></td>
+                <td>
+                    <input type="text" name="name_{{ item.temp_id }}" value="{{ item.chemical_name }}" class="form-control">
+                </td>
+                <td>
+                    <input type="text" name="cas_{{ item.temp_id }}" value="{{ item.cas_rn }}" class="form-control">
+                </td>
+                <td>
+                    <input type="text" name="smiles_{{ item.temp_id }}" value="{{ item.smiles }}" class="form-control">
+                </td>
+                <td>
+                    <span class="badge {% if item.status == 'Ready' %}bg-success{% else %}bg-warning{% endif %}">
+                        {{ item.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="mt-3">
+        <button type="submit" name="action_save_edits" class="btn btn-secondary">Update Mappings</button>
+        <!-- The commit action button that currently stops short of writing to DB -->
+        <button type="submit" name="action_commit" class="btn btn-primary" onclick="return confirm('Ready to commit? (Currently mocked)');">
+            Proceed to Commit (Disabled)
+        </button>
+    </div>
+</form>

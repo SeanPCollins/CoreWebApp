@@ -1,0 +1,29 @@
+# Secrets and environment-specific settings (each environment keeps its own .env)
+.env
+.env.*
+
+# Virtual environments (rebuilt per environment)
+.venv/
+venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Celery beat schedule state (per-environment, must not be shared)
+celerybeat-schedule*
+
+# Generated static files
+staticfiles/
+
+# Local data: runs, uploads, and database dumps stay with the environment that produced them
+.private/
+imports/
+archive/*.dump
+*.dump
+*.sqlite3
+
+# Logs and editor files
+*.log
+.vscode/
+.idea/

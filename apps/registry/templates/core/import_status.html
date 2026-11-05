@@ -1,0 +1,109 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<main style="max-width: 760px; margin: 40px auto; padding: 32px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
+    <h1 id="status-title">Import status: {{ source_import.original_filename }}</h1>
+
+    <p id="stage-message" role="status" aria-live="polite">
+        Checking import status…
+    </p>
+
+    <dl style="display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px;">
+        <dt>Rows in the batch</dt>
+        <dd id="staged-count" style="margin: 0;">{{ source_import.staged_row_count }}</dd>
+        <dt>Imported rows</dt>
+        <dd id="imported-count" style="margin: 0;">{{ source_import.row_count }}</dd>
+    </dl>
+
+    <div id="status-error" hidden role="alert"
+         style="padding: 12px; background: #fef2f2; color: #b91c1c; white-space: pre-wrap;">
+        <strong>Details:</strong>
+        <span id="status-error-text"></span>
+    </div>
+
+    <p id="retry-link" hidden>
+        <a href="{{ preview_url }}">Return to the import preview to retry</a>
+    </p>
+    <p id="admin-link" hidden>
+        <a href="{{ admin_url }}">View this import batch in admin</a>
+    </p>
+    <p><a href="{% url 'import_upload' %}">Start another upload</a></p>
+</main>
+
+<script>
+(() => {
+    const statusUrl = "{{ status_url|escapejs }}";
+    const previewUrl = "{{ preview_url|escapejs }}";
+    const message = document.getElementById('stage-message');
+    const count = document.getElementById('staged-count');
+    const importedCount = document.getElementById('imported-count');
+    const errorBox = document.getElementById('status-error');
+    const errorText = document.getElementById('status-error-text');
+    const retryLink = document.getElementById('retry-link');
+    const adminLink = document.getElementById('admin-link');
+
+    async function pollStatus() {
+        try {
+            const response = await fetch(statusUrl, {
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error(`Status check returned ${response.status}`);
+            }
+
+            const data = await response.json();
+            count.textContent = Number(data.staged_rows).toLocaleString();
+            importedCount.textContent = Number(data.row_count).toLocaleString();
+
+            if (data.staging_status === 'FAILED') {
+                message.textContent = 'The file could not be prepared for import.';
+                errorText.textContent = data.error || 'No error details were provided.';
+                errorBox.hidden = false;
+                retryLink.hidden = false;
+                return;
+            }
+
+            if (data.staging_status !== 'READY') {
+                message.textContent = 'Staging rows in the background…';
+                window.setTimeout(pollStatus, 2500);
+                return;
+            }
+
+            if (data.import_status === 'PENDING') {
+                window.location.assign(previewUrl);
+                return;
+            }
+
+            if (data.import_status === 'QUEUED' || data.import_status === 'PROCESSING') {
+                message.textContent = data.progress_message || 'The import is processing.';
+                window.setTimeout(pollStatus, 2500);
+                return;
+            }
+
+            if (data.import_status === 'SUCCESS') {
+                message.textContent = `Import completed successfully: ${Number(data.row_count).toLocaleString()} rows imported.`;
+                adminLink.hidden = false;
+                return;
+            }
+
+            if (data.import_status === 'FAILED') {
+                message.textContent = data.progress_message || 'The import failed.';
+                errorText.textContent = data.error || 'No error details were provided.';
+                errorBox.hidden = false;
+                retryLink.hidden = false;
+                return;
+            }
+
+            message.textContent = 'Waiting for the import status…';
+            window.setTimeout(pollStatus, 2500);
+        } catch (error) {
+            message.textContent = 'Could not refresh status; retrying shortly.';
+            window.setTimeout(pollStatus, 5000);
+        }
+    }
+
+    pollStatus();
+})();
+</script>
+{% endblock %}

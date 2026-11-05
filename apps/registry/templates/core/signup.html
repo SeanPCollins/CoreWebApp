@@ -1,0 +1,302 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - Sign Up{% endblock %}
+
+{% block style %}
+<style>
+  .input-container {
+    display: flex;
+    width: 100%;
+    margin-bottom: 15px;
+    flex-direction: column;
+  }
+  .input-container label {
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #4a5568;
+  }
+  .form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e0;
+    border-radius: 4px;
+    box-sizing: border-box;
+    outline: none;
+  }
+  .form-control:focus {
+    border-color: #3182ce;
+  }
+  .form-control-locked {
+    background-color: #edf2f7;
+    color: #718096;
+    cursor: not-allowed;
+  }
+  .alert-danger {
+    background-color: #fed7d7;
+    color: #c53030;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    border: 1px solid #feb2b2;
+  }
+  .password-toggle-btn {
+    background: none;
+    border: none;
+    color: #3182ce;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font-weight: 500;
+    margin-top: 5px;
+  }
+  #username-status, #email-status {
+    font-size: 0.85rem;
+    margin-top: 5px;
+    font-weight: 500;
+  }
+  .status-available { color: #38a169; }
+  .status-taken { color: #e53e3e; }
+  .forgot-link {
+    font-size: 0.85rem;
+    margin-top: 4px;
+    color: #3182ce;
+    text-decoration: none;
+  }
+  .forgot-link:hover {
+    text-decoration: underline;
+  }
+  .suggestion-container {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .suggestion-label {
+    font-size: 0.8rem;
+    color: #718096;
+  }
+  .suggestion-pill {
+    background-color: #ebf8ff;
+    color: #2b6cb0;
+    border: 1px solid #bee3f8;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .suggestion-pill:hover {
+    background-color: #bee3f8;
+  }
+  .error-field {
+    border: 2px solid #e53e3e !important;
+    background-color: #fff5f5;
+  }
+</style>
+{% endblock style %}
+
+{% block content %}
+<h2>Create an Account</h2>
+
+<!-- Red Warning Banner for Unfilled Fields -->
+<div id="form-error-banner" class="alert alert-danger" style="display: none;">
+  <strong>Warning:</strong> Please fill in all required fields before creating an account.
+</div>
+
+{% if form.errors %}
+  <div class="alert alert-danger" role="alert">
+    <strong>Please correct the following:</strong>
+    <ul>
+      {% for field in form %}
+        {% for error in field.errors %}
+          <li>{{ field.label }}: {{ error }}</li>
+        {% endfor %}
+      {% endfor %}
+      {% for error in form.non_field_errors %}
+        <li>{{ error }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<form method="post" style="max-width:500px;" id="signup-form" novalidate>
+  {% csrf_token %}
+  
+  <div class="input-container">
+    <label for="first_name">First Name:</label>
+    <input type="text" class="form-control required-field" id="first_name" name="first_name" required value="{{ form.first_name.value|default:'' }}">
+  </div>
+
+  <div class="input-container">
+    <label for="last_name">Last Name:</label>
+    <input type="text" class="form-control required-field" id="last_name" name="last_name" required value="{{ form.last_name.value|default:'' }}">
+  </div>
+
+  <div class="input-container">
+    <label for="username">Username (generated from your name):</label>
+    <input type="text" class="form-control form-control-locked" id="username" name="username" readonly value="{{ form.username.value|default:'' }}">
+    <small>Choose a numbered suggestion if your suggested username is already taken.</small>
+    <div id="username-status"></div>
+    <div id="username-suggestions" class="suggestion-container" style="display: none;">
+      <span class="suggestion-label">Suggestions:</span>
+    </div>
+  </div>
+
+  <div class="input-container">
+    <label for="email">Email Address:</label>
+    <input type="email" class="form-control required-field" id="email" name="email" required value="{{ form.email.value|default:'' }}">
+    <div id="email-status"></div>
+    <a href="{% url 'password_reset' %}" id="forgot-password-link" class="forgot-link" style="display: none;">Forgot your password? Reset it here.</a>
+  </div>
+
+  <div class="input-container">
+    <label for="password1">Password:</label>
+    <input type="password" class="form-control required-field" id="password1" name="password1" required>
+  </div>
+
+  <div class="input-container">
+    <label for="password2">Re-enter Password:</label>
+    <input type="password" class="form-control required-field" id="password2" name="password2" required>
+    <button type="button" class="password-toggle-btn" onclick="togglePasswords()">Show Passwords</button>
+  </div>
+
+  <div class="input-container">
+    <label for="reason">Reason For Account:</label>
+    <textarea class="form-control required-field" id="reason" name="reason" rows="4" required>{{ form.reason.value|default:'' }}</textarea>
+  </div>
+
+  <button type="submit" class="btn" id="submit-btn">Submit Request</button>
+</form>
+{% endblock content %}
+
+{% block script %}
+<script>
+const usernameInput = document.getElementById('username');
+const statusDiv = document.getElementById('username-status');
+const suggestionsDiv = document.getElementById('username-suggestions');
+const emailInput = document.getElementById('email');
+const emailStatusDiv = document.getElementById('email-status');
+const forgotPasswordLink = document.getElementById('forgot-password-link');
+const submitBtn = document.getElementById('submit-btn');
+const signupForm = document.getElementById('signup-form');
+const errorBanner = document.getElementById('form-error-banner');
+
+let debounceTimer;
+let isCustomUsername = false;
+
+function triggerLiveCheck() {
+  const firstName = document.getElementById('first_name').value.trim();
+  const lastName = document.getElementById('last_name').value.trim();
+  const email = emailInput.value.trim();
+
+  let currentUsername = usernameInput.value.trim();
+
+  if (firstName && lastName && !isCustomUsername) {
+    currentUsername = (firstName.charAt(0) + lastName).toLowerCase();
+    usernameInput.value = currentUsername;
+  } else if (!firstName || !lastName) {
+    usernameInput.value = '';
+    currentUsername = '';
+    statusDiv.innerHTML = '';
+    suggestionsDiv.style.display = 'none';
+    isCustomUsername = false;
+  }
+
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    if (!currentUsername) return;
+
+    fetch(`../api/check-username/?username=${encodeURIComponent(currentUsername)}&email=${encodeURIComponent(email)}`)
+      .then(response => response.json())
+      .then(data => {
+        suggestionsDiv.innerHTML = '<span class="suggestion-label">Suggestions:</span>';
+        if (data.username_available) {
+          statusDiv.innerHTML = '✓ Username is available';
+          statusDiv.className = 'status-available';
+          suggestionsDiv.style.display = 'none';
+        } else {
+          statusDiv.innerHTML = '✕ Username is already taken';
+          statusDiv.className = 'status-taken';
+          if (data.suggestions && data.suggestions.length > 0) {
+            data.suggestions.forEach(alt => {
+              const pill = document.createElement('span');
+              pill.className = 'suggestion-pill';
+              pill.textContent = alt;
+              pill.onclick = () => {
+                isCustomUsername = true;
+                usernameInput.value = alt;
+                triggerLiveCheck();
+              };
+              suggestionsDiv.appendChild(pill);
+            });
+            suggestionsDiv.style.display = 'flex';
+          }
+        }
+
+        if (email) {
+          if (data.email_exists) {
+            emailStatusDiv.innerHTML = '✕ An account with this email already exists.';
+            emailStatusDiv.className = 'status-taken';
+            forgotPasswordLink.style.display = 'inline-block';
+          } else {
+            emailStatusDiv.innerHTML = '';
+            forgotPasswordLink.style.display = 'none';
+          }
+        } else {
+          emailStatusDiv.innerHTML = '';
+          forgotPasswordLink.style.display = 'none';
+        }
+      });
+  }, 300);
+}
+
+document.getElementById('first_name').addEventListener('input', () => {
+  isCustomUsername = false;
+  triggerLiveCheck();
+});
+document.getElementById('last_name').addEventListener('input', () => {
+  isCustomUsername = false;
+  triggerLiveCheck();
+});
+emailInput.addEventListener('input', triggerLiveCheck);
+
+// Form submission validation handler
+signupForm.addEventListener('submit', function(e) {
+  const requiredFields = signupForm.querySelectorAll('.required-field');
+  let hasError = false;
+
+  requiredFields.forEach(field => {
+    if (!field.value.trim()) {
+      field.classList.add('error-field');
+      hasError = true;
+    } else {
+      field.classList.remove('error-field');
+    }
+  });
+
+  if (hasError) {
+    e.preventDefault();
+    errorBanner.style.display = 'block';
+    errorBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    errorBanner.style.display = 'none';
+  }
+});
+
+function togglePasswords() {
+  const p1 = document.getElementById('password1');
+  const p2 = document.getElementById('password2');
+  const btn = document.querySelector('.password-toggle-btn');
+
+  if (p1.type === 'password') {
+    p1.type = 'text';
+    p2.type = 'text';
+    btn.textContent = 'Hide Passwords';
+  } else {
+    p1.type = 'password';
+    p2.type = 'password';
+    btn.textContent = 'Show Passwords';
+  }
+}
+</script>
+{% endblock script %}

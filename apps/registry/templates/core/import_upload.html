@@ -1,0 +1,81 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div style="max-width: 600px; margin: 40px auto; padding: 32px; background: #fff; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+    <div style="border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; margin-bottom: 24px;">
+        <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #2563eb; letter-spacing: 0.05em;">Step 1 of 4</span>
+        <h2 style="margin: 4px 0 8px 0; font-size: 1.5rem; color: #1e293b;">Upload Spreadsheet</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin: 0;">Upload your CSV or Excel file containing chemical data. It will be saved securely and tracked in the system.</p>
+    </div>
+
+    <!-- Django Messages Framework feedback block for error messages -->
+    {% if messages %}
+    <div style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <div style="padding: 12px 16px; border-radius: 6px; font-size: 0.9rem; background: {% if message.tags == 'error' %}#ffeeef; color: #dc2626; border: 1px solid #fca5a5{% else %}#f0fdf4; color: #16a34a; border: 1px solid #bbf7d0{% endif %};">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" style="margin-top: 20px;">
+        {% csrf_token %}
+        <div id="drop-zone" style="border: 2px dashed #cbd5e1; padding: 32px; text-align: center; border-radius: 8px; background: #f8fafc; margin-bottom: 24px; transition: all 0.2s;">
+            <label for="spreadsheet_file" style="cursor: pointer; display: block;">
+                <svg style="width: 40px; height: 40px; color: #64748b; margin-bottom: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                <span style="display: block; font-weight: 600; color: #334155; font-size: 0.95rem; margin-bottom: 4px;">Choose a file or drag it here</span>
+                <span style="display: block; color: #64748b; font-size: 0.85rem;" id="file-name-display">Supports .csv, .xlsx, .xls files</span>
+            </label>
+            <!-- Updated accept attribute to include Excel formats -->
+            <input type="file" id="spreadsheet_file" name="csv_file" accept=".csv, .xlsx, .xls" required style="display: none;">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" style="background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);">Next: Map Columns →</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('spreadsheet_file');
+    const fileNameDisplay = document.getElementById('file-name-display');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = '#2563eb';
+            dropZone.style.background = '#eff6ff';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = '#cbd5e1';
+            dropZone.style.background = '#f8fafc';
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            fileInput.files = files;
+            fileNameDisplay.textContent = 'Selected: ' + files[0].name;
+        }
+    }, false);
+
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            fileNameDisplay.textContent = 'Selected: ' + this.files[0].name;
+        }
+    });
+</script>
+{% endblock %}

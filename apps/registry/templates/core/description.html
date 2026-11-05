@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - About the Database{% endblock %}
+
+{% block content %}
+<main style="max-width: 1000px; margin: 32px auto; padding: 28px; color: var(--text-main);">
+    <header style="margin-bottom: 30px;">
+        <h1 style="color: var(--text-heading); margin: 0 0 12px;">About the CORE chemical database</h1>
+        <p style="font-size: 1.05rem; line-height: 1.7; color: var(--text-muted); margin: 0;">
+            The <strong>Chemical Organization &amp; Research Engine (CORE)</strong> brings
+            together chemical information from curated datasets and external reference
+            sources. It is being developed to make chemical identities, structures, and
+            related information easier to connect and retrieve. Database coverage is
+            expanding as information is collected and reviewed.
+        </p>
+    </header>
+
+    <section aria-labelledby="sources-heading" style="margin-top: 28px;">
+        <h2 id="sources-heading" style="color: var(--text-heading);">Information sources</h2>
+        <p style="line-height: 1.7; color: var(--text-muted);">
+            CORE combines uploaded datasets with information gathered from external
+            chemical reference services. The currently configured services include:
+        </p>
+        <ul style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px 24px; line-height: 1.7; padding-left: 22px;">
+            <li>CAS Common Chemistry</li>
+            <li>PubChem</li>
+            <li>EPA CompTox Chemicals Dashboard</li>
+            <li>ChEMBL</li>
+            <li>NCI Chemical Identifier Resolver (CACTUS)</li>
+            <li>ChemSpider</li>
+        </ul>
+        <p style="line-height: 1.7; color: var(--text-muted);">
+            Each source has different coverage and may report different details. A source
+            may not provide every type of information for every chemical, and records
+            continue to be added and assessed.
+        </p>
+    </section>
+
+    <section aria-labelledby="data-heading" style="margin-top: 32px;">
+        <h2 id="data-heading" style="color: var(--text-heading);">Information CORE is compiling</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px;">
+            <article style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 18px;">
+                <h3 style="margin: 0 0 8px; color: var(--text-heading);">Chemical identifiers</h3>
+                <p style="margin: 0; color: var(--text-muted); line-height: 1.6;">
+                    Identifiers such as CAS Registry Numbers (CAS-RNs), EPA DTXSIDs,
+                    PubChem CIDs, ChemSpider IDs, FDA UNIIs, EINECS numbers, CERAPP IDs,
+                    and other identifiers supplied by sources.
+                </p>
+            </article>
+            <article style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 18px;">
+                <h3 style="margin: 0 0 8px; color: var(--text-heading);">Names and structures</h3>
+                <p style="margin: 0; color: var(--text-muted); line-height: 1.6;">
+                    Preferred and alternative names, molecular structures and their
+                    representations (including InChI, InChIKey, and SMILES), plus
+                    relationships between full structures, components, and parent
+                    structures where available.
+                </p>
+            </article>
+            <article style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 18px;">
+                <h3 style="margin: 0 0 8px; color: var(--text-heading);">Properties and source details</h3>
+                <p style="margin: 0; color: var(--text-muted); line-height: 1.6;">
+                    Molecular formula, molecular weight, exact mass, physicochemical
+                    properties, chemical classifications, and other source-reported
+                    chemical or biological information as it becomes available.
+                </p>
+            </article>
+        </div>
+        <p style="margin-top: 18px; line-height: 1.7; color: var(--text-muted);">
+            Information is kept with its source so that reported values can be traced and
+            compared. Not every chemical record will contain every identifier, structure,
+            property, or source report.
+        </p>
+    </section>
+</main>
+{% endblock %}

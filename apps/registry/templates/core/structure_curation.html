@@ -1,0 +1,795 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Structure Curation - CORE{% endblock %}
+
+{% block content %}
+<h1>Structure Curation</h1>
+<p class="tagline">
+    Scan Web Findings in the background, validate available chemistry, and preview
+    unique InChIKeys with their supporting evidence.
+</p>
+
+<div class="stats-box">
+    <strong>Review before commit:</strong> scans and curation changes remain in temporary
+    reports until you explicitly add accepted structures. That action writes Structure
+    and StructureEvidence rows; deleting a report later does not undo those database changes.
+    New WebFindings are placed in a persistent queue. Each normal batch samples a
+    random, saved set, and findings not selected remain queued for later; use a full
+    scan to process all currently pending findings.
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="stats-box" role="status">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post" style="margin: 24px 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+    {% csrf_token %}
+    <label>Maximum WebFindings in this random batch
+        <input type="number" name="batch_limit" value="1000" min="1" max="50000" required>
+    </label>
+    <button class="btn" type="submit" name="action" value="scan"
+        {% if run_state.status == 'QUEUED' or run_state.status == 'RUNNING' or run_state.status == 'FINALIZING' %}disabled{% endif %}>
+        Start random batch
+    </button>
+    <button class="btn" type="submit" name="action" value="full_scan"
+        {% if run_state.status == 'QUEUED' or run_state.status == 'RUNNING' or run_state.status == 'FINALIZING' %}disabled{% endif %}
+        onclick="return confirm('Process every currently pending WebFinding?');">
+        Process all pending findings
+    </button>
+    <span style="color: var(--text-muted);">
+        Batch membership is saved so you can return to it later.
+    </span>
+</form>
+
+<details style="margin: 16px 0;">
+    <summary>Previous curation batches</summary>
+    <p>Resume a prior batch to finish records marked Needs work. Rejected findings stay excluded.</p>
+    {% if curation_batches %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left;">
+                    <th style="padding: 8px;">Batch</th>
+                    <th style="padding: 8px;">Created</th>
+                    <th style="padding: 8px;">Status</th>
+                    <th style="padding: 8px;">Selected / candidates</th>
+                    <th style="padding: 8px;">Needs work</th>
+                    <th style="padding: 8px;">Open</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for batch in curation_batches %}
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 8px;"><code>{{ batch.run_id|slice:":8" }}</code></td>
+                        <td style="padding: 8px;">{{ batch.created_at }}</td>
+                        <td style="padding: 8px;">{% if batch.superseded %}REPROCESSED{% else %}{{ batch.status }}{% endif %}</td>
+                        <td style="padding: 8px;">{{ batch.selected_count }} / {{ batch.candidate_count }}</td>
+                        <td style="padding: 8px;">{{ batch.needs_work_count }}</td>
+                        <td style="padding: 8px;"><a href="?run_id={{ batch.run_id }}">Resume / review</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No saved batches yet.</p>
+    {% endif %}
+</details>
+
+{% if run_state %}
+<section id="scan-status"
+    {% if run_state.status == 'QUEUED' or run_state.status == 'RUNNING' or run_state.status == 'FINALIZING' %}
+        data-status-url="{% url 'structure_curation_status' run_id %}"
+    {% endif %}
+    style="margin: 24px 0; padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius);">
+    <h2 style="margin-top: 0;">Latest scan: <span id="scan-state">{{ run_state.status }}</span></h2>
+    <p>Scan type: {{ run_state.scan_mode|default:"incremental" }}</p>
+    {% if run_state.batch_id %}
+        {% if run_state.scan_mode == 'reprocessed_batch' %}
+            <p>
+                Reprocessed batch: {{ run_state.batch_selected_count }} parsed,
+                uncommitted finding(s) carried forward from the prior preview.
+            </p>
+        {% else %}
+            <p>
+                Random batch: {{ run_state.batch_selected_count }} selected from
+                {{ run_state.batch_candidate_count }} pending finding(s).
+                Seed {{ run_state.batch_seed|default:"saved" }}.
+            </p>
+        {% endif %}
+    {% endif %}
+    <p>Started: {{ run_state.created_at }}</p>
+    <p>
+        Findings processed:
+        <strong id="processed-count">{{ run_state.processed_findings }}</strong>
+        {% if run_state.total_findings is not None %}
+            of <span id="total-count">{{ run_state.total_findings }}</span>
+        {% else %}
+            (counting)
+        {% endif %}
+    </p>
+    <progress id="scan-progress" max="{{ run_state.total_findings|default:0 }}"
+        value="{{ run_state.processed_findings }}"
+        style="width: 100%; height: 18px;"></progress>
+
+    {% if run_state.status == 'FAILED' %}
+        <p role="alert" style="color: #b91c1c;">Scan failed: {{ run_state.error }}</p>
+        {% if can_retry_finalization %}
+            <form method="post" style="margin: 16px 0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="retry_finalization">
+                <input type="hidden" name="run_id" value="{{ run_id }}">
+                <button class="btn" type="submit"
+                    onclick="return confirm('Retry finalization from the saved scan results? This will not reprocess findings or rerun provider searches.');">
+                    Retry finalization from saved results
+                </button>
+                <small>The findings were already processed. This retries only the final report and review preparation.</small>
+            </form>
+        {% endif %}
+    {% endif %}
+
+    {% if run_state.status == 'COMPLETED' %}
+        {% if run_state.batch_id and not run_state.database_commit and not run_state.superseded_by_reprocessing %}
+            <form method="post" style="margin: 16px 0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reprocess_batch">
+                <input type="hidden" name="run_id" value="{{ run_id }}">
+                <button class="btn" type="submit"
+                    onclick="return confirm('Rebuild only parsed findings from this batch that have not already been committed? Unsupported or unparsed findings, unrelated pending findings, and committed evidence will be left untouched. Provider searches will not be rerun.');">
+                    Rebuild this batch with current rules
+                </button>
+                <small>Reprocesses only findings that produced parsed structure evidence and have not already been committed. Unsupported or unparsed findings and unrelated pending findings are excluded; provider searches are not repeated.</small>
+            </form>
+        {% endif %}
+        {% if not report_is_current %}
+            <p role="alert" style="color: #b91c1c;">
+                This scan was finalized with report format
+                {{ run_state.report_format_version|default:"unknown" }}, but this web app
+                requires format {{ current_report_format_version }}. Its Structure and
+                evidence fields cannot be reviewed. The rebuild was processed by a
+                registry worker running older or different code; restarting Celery alone
+                did not update the worker that handled it. Deploy the same code release
+                to every worker consuming the registry queue, then rebuild this batch.
+                Start a full scan only if you intend to include all currently pending
+                findings.
+            </p>
+        {% else %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 24px 0;">
+            <div style="padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
+                <div style="font-size: .75rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Unique structures (InChIKeys)</div>
+                <div style="margin-top: 6px; font-size: 1.5rem; font-weight: 700;">{{ run_state.unique_keys }}</div>
+            </div>
+            <div style="padding: 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; text-align: center;">
+                <div style="font-size: .75rem; color: #1e40af; font-weight: 600; text-transform: uppercase;">Already in Structure database</div>
+                <div style="margin-top: 6px; font-size: 1.5rem; font-weight: 700;">{{ run_state.already_in_structure_database_count }}</div>
+            </div>
+            <div style="padding: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center;">
+                <div style="font-size: .75rem; color: #166534; font-weight: 600; text-transform: uppercase;">New and ready to add</div>
+                <div style="margin-top: 6px; font-size: 1.5rem; font-weight: 700;">{{ ready_new_count }}</div>
+            </div>
+            <div style="padding: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; text-align: center;">
+                <div style="font-size: .75rem; color: #92400e; font-weight: 600; text-transform: uppercase;">Need review</div>
+                <div style="margin-top: 6px; font-size: 1.5rem; font-weight: 700;">{{ needs_review_count }}</div>
+            </div>
+        </div>
+        <p style="color: #64748b;">
+            A structure is ready as-is when automated checks found no issue. Review-queue
+            structures are added only after you explicitly accept them. Salt-component
+            count disagreements with the same stereo-aware parent and no other conflicts
+            are accepted as distinct structures automatically; they still await the
+            normal database-add step.
+        </p>
+        {% if review_groups %}
+            <h2>Review queue by issue pattern</h2>
+            <p>
+                Expand a pattern to compare real examples. The flagged properties, computed
+                only the values relevant to each issue are shown. Fix affected fields or
+                explicitly accept the record to remove it from this queue.
+            </p>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th scope="col">Complexity</th>
+                            <th scope="col">Issue pattern</th>
+                            <th scope="col">Structures</th>
+                            <th scope="col">Group default</th>
+                            <th scope="col">Apply to group</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group in review_groups %}
+                            <tr style="border-top: 1px solid var(--border-color);">
+                                <td>{{ group.complexity }}</td>
+                                <td>
+                                    <code>{{ group.flags|join:", " }}</code>
+                                    <ul>
+                                        {% for description in group.descriptions %}
+                                            <li>{{ description }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    <details>
+                                        <summary>Inspect {{ group.count }} chemicals and their issues</summary>
+                                        {% for record in group.records %}
+                                            <article style="margin: 12px 0; padding: 12px; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 6px;">
+                                                <strong><code>{{ record.inchikey }}</code></strong>
+                                                <span style="color: #991b1b;">{{ record.review_flags|join:", " }}</span>
+                                                <p style="margin: 6px 0;">
+                                                    {{ record.molecular_formula|default:"Formula unavailable" }};
+                                                    <code>{{ record.canonical_smiles|default:"SMILES unavailable" }}</code>
+                                                </p>
+                                                {% if record.components %}
+                                                    <details>
+                                                        <summary>Non-trivial structure components ({{ record.components|length }})</summary>
+                                                        <ul>
+                                                            {% for component in record.components %}
+                                                                <li>
+                                                                    {% if component.is_parent_component %}<strong>Largest-organic parent</strong>{% else %}Component{% endif %}:
+                                                                    {{ component.molecular_formula }};
+                                                                    <code>{{ component.isomeric_smiles }}</code>
+                                                                    {% if component.component_count > 1 %}× {{ component.component_count }}{% endif %}
+                                                                </li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    </details>
+                                                {% endif %}
+                                                <details>
+                                                    <summary>Show only the conflicting values and evidence</summary>
+                                                    {% for issue in record.issue_details %}
+                                                        <section style="margin: 10px 0; padding: 10px; background: #fff7ed; border-radius: 6px;">
+                                                            <strong>{{ issue.label }}</strong>
+                                                            {% if issue.variants %}
+                                                                <ul>
+                                                                    {% for variant in issue.variants %}
+                                                                        <li>
+                                                                            <strong>Computed value:</strong>
+                                                                            <code>{{ variant.value }}</code>
+                                                                            <br>{{ variant.finding_count }} finding(s)
+                                                                            {% if variant.providers %}from {{ variant.providers|join:", " }}{% endif %}
+                                                                            {% if variant.sources %}<br>Derived from {{ variant.sources|join:", " }} input(s){% endif %}
+                                                                            {% if variant.finding_ids %}
+                                                                                <br><small>Finding(s): {{ variant.finding_ids|join:", " }}</small>
+                                                                            {% endif %}
+                                                                        </li>
+                                                                    {% endfor %}
+                                                                </ul>
+                                                            {% endif %}
+                                                            {% if not issue.variants %}
+                                                            {% for evidence in issue.evidence %}
+                                                                <div style="margin-top: 8px;">
+                                                                    <strong>{{ evidence.provider_code }}</strong>
+                                                                    ({{ evidence.assessment }})
+                                                                    {% if evidence.finding_ids %}
+                                                                        <small>Finding(s): {{ evidence.finding_ids|join:", " }}</small>
+                                                                    {% else %}
+                                                                        <small>Finding {{ evidence.web_finding_id }}</small>
+                                                                    {% endif %}
+                                                                    {% for value in evidence.reported_values %}
+                                                                        <div>
+                                                                            <strong>Reported {{ value.field }}{% if value.normalized %} (normalized){% endif %}:</strong>
+                                                                            <code>{{ value.value|pprint }}</code>
+                                                                            {% if value.raw_value %}<small>Raw: <code>{{ value.raw_value|pprint }}</code></small>{% endif %}
+                                                                        </div>
+                                                                    {% endfor %}
+                                                                    {% for value in evidence.computed_values %}
+                                                                        <div>
+                                                                            <strong>Computed {{ value.field }}
+                                                                            {% if value.source %}from {{ value.source }}{% endif %}:
+                                                                            </strong>
+                                                                            <code>{{ value.value }}</code>
+                                                                        </div>
+                                                                    {% endfor %}
+                                                                    {% for error in evidence.structure_errors %}
+                                                                        <div role="alert">Structure issue: {{ error }}</div>
+                                                                    {% endfor %}
+                                                                </div>
+                                                            {% empty %}
+                                                                {% if not issue.variants %}
+                                                                    <p>No matching provider detail was retained for this issue.</p>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                            {% endif %}
+                                                        </section>
+                                                    {% endfor %}
+                                                </details>
+                                                {% if not run_state.database_commit %}
+                                                <form method="post" style="margin-top: 10px;">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="triage_structure">
+                                                    <input type="hidden" name="run_id" value="{{ run_id }}">
+                                                    <input type="hidden" name="inchikey" value="{{ record.triage_original_inchikey }}">
+                                                    <label>Decision
+                                                        <select name="decision" required>
+                                                            <option value="ACCEPTED" {% if record.triage_decision == 'ACCEPTED' or record.triage_decision == 'UNDECIDED' %}selected{% endif %}>Accept corrections</option>
+                                                            <option value="NEEDS_WORK" {% if record.triage_decision == 'NEEDS_WORK' %}selected{% endif %}>Needs work</option>
+                                                            <option value="REJECTED" {% if record.triage_decision == 'REJECTED' %}selected{% endif %}>Reject</option>
+                                                        </select>
+                                                    </label>
+                                                    {% if 'corrected_smiles' in record.issue_edit_fields %}
+                                                        <label style="display: block; margin-top: 6px;">Override structure with corrected SMILES (optional)
+                                                            <input name="edited_smiles" type="text" style="width: 100%;"
+                                                                placeholder="Enter the correct structure as SMILES; leave blank to keep the proposed structure">
+                                                        </label>
+                                                    {% endif %}
+                                                    {% for field in record.issue_edit_fields %}
+                                                        {% if field == 'molecular_formula' %}
+                                                            <label style="display: block; margin-top: 6px;">Correct molecular formula
+                                                                <input name="molecular_formula" type="text" value="{{ record.molecular_formula|default:'' }}" placeholder="e.g. C2H6O">
+                                                            </label>
+                                                        {% elif field == 'molecular_weight' %}
+                                                            <label style="display: block; margin-top: 6px;">Correct molecular weight
+                                                                <input name="molecular_weight" type="number" step="any" value="{{ record.molecular_weight|default:'' }}">
+                                                            </label>
+                                                        {% elif field == 'exact_mass' %}
+                                                            <label style="display: block; margin-top: 6px;">Correct exact mass
+                                                                <input name="exact_mass" type="number" step="any" value="{{ record.exact_mass|default:'' }}">
+                                                            </label>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                    <small>Corrected SMILES regenerates the key and parent. Formula/mass corrections are saved as reviewed values.</small>
+                                                    <button class="btn" type="submit">Save corrections and accept</button>
+                                                </form>
+                                                {% else %}
+                                                    <small>This preview has already been committed.</small>
+                                                {% endif %}
+                                                {% if record.show_split_structure_action and not run_state.database_commit %}
+                                                    <form method="post" style="margin-top: 8px; padding: 8px; background: #f0fdf4; border-radius: 6px;">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="triage_split">
+                                                        <input type="hidden" name="run_id" value="{{ run_id }}">
+                                                        <input type="hidden" name="inchikey" value="{{ record.triage_original_inchikey }}">
+                                                        <p style="margin: 0 0 6px;">The InChI and SMILES parse to two different structures. Accept both as separate structures? The source finding will be linked as evidence to each.</p>
+                                                        <ul style="margin-top: 0;">
+                                                            {% for candidate_key in record.split_structure_input_keys %}
+                                                                <li><code>{{ candidate_key }}</code></li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                        <button class="btn" type="submit">Keep both as separate structures</button>
+                                                    </form>
+                                                {% endif %}
+                                            </article>
+                                        {% empty %}
+                                            <p>No preview records are available for this issue group.</p>
+                                        {% endfor %}
+                                    </details>
+                                </td>
+                                <td>{{ group.count }}</td>
+                                <td>{{ group.decision }}</td>
+                                <td>
+                                    {% if not run_state.database_commit %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="triage_group">
+                                        <input type="hidden" name="run_id" value="{{ run_id }}">
+                                        <input type="hidden" name="group_id" value="{{ group.id }}">
+                                        <select name="decision" aria-label="Decision for this issue group" required>
+                                            <option value="" disabled {% if group.decision == 'UNDECIDED' %}selected{% endif %}>Choose a decision</option>
+                                            <option value="ACCEPTED" {% if group.decision == 'ACCEPTED' %}selected{% endif %}>Accept group</option>
+                                            <option value="NEEDS_WORK" {% if group.decision == 'NEEDS_WORK' %}selected{% endif %}>Needs more work</option>
+                                            <option value="REJECTED" {% if group.decision == 'REJECTED' %}selected{% endif %}>Reject group</option>
+                                        </select>
+                                        <button class="btn" type="submit">Apply</button>
+                                    </form>
+                                    {% else %}
+                                        <small>Committed</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No structures currently need review.</p>
+        {% endif %}
+        <h2>Good structures — no review required</h2>
+        <p>{{ review_queue.ready_new|length }} new structures passed the automated checks.</p>
+        {% if review_queue.ready_new %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left;">
+                            <th style="padding: 10px;">InChIKey</th>
+                            <th style="padding: 10px;">Formula</th>
+                            <th style="padding: 10px;">Canonical SMILES</th>
+                            <th style="padding: 10px;">Parent InChIKey</th>
+                            <th style="padding: 10px;">Evidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in review_queue.ready_new %}
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="padding: 10px;"><code>{{ record.inchikey }}</code></td>
+                                <td style="padding: 10px;">{{ record.molecular_formula|default:"—" }}</td>
+                                <td style="padding: 10px;"><code>{{ record.canonical_smiles|default:"—" }}</code></td>
+                                <td style="padding: 10px;"><code>{{ record.parent_inchikey|default:"—" }}</code></td>
+                                <td style="padding: 10px;">
+                                    {% if record.key_only_placeholder %}
+                                        InChIKey-only placeholder; later matching structure evidence will fill in the structure details.
+                                    {% else %}
+                                        {{ record.supporting_finding_count }} supporting finding(s), {{ record.provider_count }} provider(s)
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+        {% if review_queue.already_existing %}
+            <details>
+                <summary>{{ review_queue.already_existing|length }} good structure(s) already in the database</summary>
+                <ul>
+                    {% for record in review_queue.already_existing %}
+                        <li><code>{{ record.inchikey }}</code> — {{ record.molecular_formula|default:"formula unavailable" }}</li>
+                    {% endfor %}
+                </ul>
+            </details>
+        {% endif %}
+        <section style="margin: 20px 0; padding: 18px; border: 1px solid var(--border-color); border-radius: var(--radius);">
+            <h2 style="margin-top: 0;">Add reviewed structures to the database</h2>
+            {% if run_state.commit_job.status == 'QUEUED' or run_state.commit_job.status == 'RUNNING' %}
+                <div id="commit-panel" data-status-url="{% url 'structure_curation_status' run_id %}" role="status"
+                    style="padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; margin-bottom: 12px;">
+                    <p style="margin-top: 0;"><strong>Adding accepted structures in the background.</strong>
+                        You can leave this page; the add continues on the server.</p>
+                    <p>Stage: <span id="commit-stage">{{ run_state.commit_progress.stage|default:'Queued' }}</span></p>
+                    <progress id="commit-progress" max="1" value="0" style="width: 100%;"></progress>
+                    <p id="commit-count"></p>
+                </div>
+            {% endif %}
+            {% if run_state.commit_job.status == 'FAILED' %}
+                <p role="alert" style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px;">
+                    The last add failed: {{ run_state.commit_job.error }}
+                </p>
+            {% endif %}
+            {% if run_state.database_commit %}
+                <p role="status">
+                    This preview was fully committed on {{ run_state.database_commit.committed_at }}.
+                    The latest add processed {{ run_state.database_commit.accepted_structures }}
+                    accepted structure(s), creating {{ run_state.database_commit.new_structure_rows }}
+                    new Structure row(s), including {{ run_state.database_commit.new_parent_rows }}
+                    parent row(s), and linking {{ run_state.database_commit.evidence_links_processed }}
+                    evidence link(s).
+                </p>
+            {% else %}
+                {% if run_state.database_commit_partial %}
+                    <p role="status" style="padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
+                        A previous add completed on {{ run_state.database_commit_partial.committed_at }}:
+                        {{ run_state.database_commit_partial.accepted_structures }} accepted structure(s)
+                        were processed, creating {{ run_state.database_commit_partial.new_structure_rows }}
+                        new Structure row(s), including
+                        {{ run_state.database_commit_partial.new_parent_rows }} parent row(s), and linking
+                        {{ run_state.database_commit_partial.evidence_links_processed }} evidence link(s).
+                        The button below applies to the accepted structures not yet committed.
+                    </p>
+                {% endif %}
+                <p>
+                    {{ ready_to_commit_count }} structure(s) are currently accepted. Unresolved,
+                    rejected, and "needs work" structures will not be added. Parent structures
+                    and finding evidence are included in the same transaction. Successfully added
+                    structures will leave the active review list; unresolved items remain here
+                    and can be resumed later.
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="commit_preview">
+                    <input type="hidden" name="run_id" value="{{ run_id }}">
+                    <button class="btn" type="submit" {% if not ready_to_commit_count or run_state.commit_job.status == 'QUEUED' or run_state.commit_job.status == 'RUNNING' %}disabled{% endif %}
+                        onclick="return confirm('Add all accepted structures, their parent structures, and evidence links to the database?');">
+                        Add {{ ready_to_commit_count }} accepted structure(s)
+                    </button>
+                </form>
+            {% endif %}
+        </section>
+        <details style="margin-top: 24px;">
+            <summary>Scan diagnostics, downloads, and full data tables</summary>
+            {% if run_state.review_flag_counts %}
+                <h3>Most common review flags</h3>
+                <ul>
+                    {% for item in run_state.review_flag_counts %}
+                        <li>{{ item.flag }}: {{ item.count }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            {% if run_state.rejection_reasons %}
+                <h3>Rejected finding reasons</h3>
+                <ul>
+                    {% for item in run_state.rejection_reasons %}
+                        <li>{{ item.reason }}: {{ item.count }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        <p>
+            <a class="btn" href="{% url 'structure_curation_download' run_id 'valid' %}">Download prospective Structures (JSONL)</a>
+            <a class="btn" href="{% url 'structure_curation_download' run_id 'evidence' %}">Download prospective evidence (JSONL)</a>
+            <a class="btn" href="{% url 'structure_curation_download' run_id 'parents' %}">Download parent Structures (JSONL)</a>
+            <a class="btn" href="{% url 'structure_curation_download' run_id 'triaged' %}">Download triaged Structures (JSONL)</a>
+            <a class="btn" href="{% url 'structure_curation_download' run_id 'triaged_evidence' %}">Download triaged evidence (JSONL)</a>
+            <a class="btn" href="{% url 'structure_curation_download' run_id 'invalid' %}">Download rejected findings (JSONL)</a>
+        </p>
+
+        <h2>Prospective Structure rows</h2>
+        <p>
+        Provider structures are standardized with Open Babel. Parents use RDKit
+        ChargeParent and have stereochemistry removed so stereoisomers can share a
+        non-stereochemical parent. Parent links use InChIKeys until database rows are
+        created.
+        </p>
+        {% if preview_records %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th scope="col">InChIKey</th>
+                            <th scope="col">Canonical SMILES</th>
+                            <th scope="col">Isomeric SMILES</th>
+                            <th scope="col">InChI</th>
+                            <th scope="col">Formula / masses</th>
+                            <th scope="col">Parent structure</th>
+                            <th scope="col">Evidence / review</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in preview_records %}
+                            <tr style="border-top: 1px solid var(--border-color);">
+                                <td style="padding: 10px; white-space: nowrap;">
+                                    <code>{{ record.inchikey }}</code>
+                                </td>
+                                <td style="padding: 10px;"><code>{{ record.canonical_smiles|default:"—" }}</code></td>
+                                <td style="padding: 10px;"><code>{{ record.isomeric_smiles|default:"—" }}</code></td>
+                                <td style="padding: 10px;"><code>{{ record.inchi|default:"—" }}</code></td>
+                                <td style="padding: 10px;">
+                                    {{ record.molecular_formula|default:"—" }}
+                                    <br><small>
+                                        MW {{ record.molecular_weight|default:"—" }};
+                                        exact {{ record.exact_mass|default:"—" }}
+                                    </small>
+                                </td>
+                                <td style="padding: 10px;">
+                                    <code>{{ record.parent_inchikey }}</code>
+                                    {% if record.parent_is_self %}
+                                        <br><small>Self-parent</small>
+                                    {% else %}
+                                        <br><small>RDKit parent: {{ record.parent_generation_status }}</small>
+                                    {% endif %}
+                                    {% if record.parent_generation_error %}
+                                        <br><small>{{ record.parent_generation_error }}</small>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 10px;">
+                                    <strong>Triage: {{ record.triage_decision }}</strong><br>
+                                    {% if record.triage_auto_reason %}
+                                        <small>Automatic decision: {{ record.triage_auto_reason }}</small><br>
+                                    {% endif %}
+                                    {{ record.review_status }}:
+                                    {{ record.review_flags|default:"No review flags" }}
+                                    <br><small>
+                                        {{ record.supporting_finding_count }} supporting finding(s);
+                                        {{ record.provider_count }} provider(s)
+                                    </small>
+                                    {% if record.already_in_structure_database %}
+                                        <br><small>InChIKey already exists in Structure</small>
+                                    {% endif %}
+                                    <details>
+                                        <summary>Computed-value variants</summary>
+                                        <pre>{{ record.computed_value_variants|pprint }}</pre>
+                                    </details>
+                                    <form method="post" style="margin-top: 8px;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="triage_structure">
+                                        <input type="hidden" name="run_id" value="{{ run_id }}">
+                                        <input type="hidden" name="inchikey" value="{{ record.triage_original_inchikey }}">
+                                        <label>
+                                            Individual decision
+                                            <select name="decision">
+                                                <option value="ACCEPTED">Accept</option>
+                                                <option value="NEEDS_WORK">Needs more work</option>
+                                                <option value="REJECTED">Reject</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            Optional corrected SMILES
+                                            <input name="edited_smiles" type="text" style="width: 100%;"
+                                                placeholder="Leave blank to only save the decision">
+                                        </label>
+                                        <small>
+                                            An edited SMILES regenerates the key, chemistry, and parent;
+                                            the new key cannot duplicate another preview row.
+                                        </small>
+                                        <button class="btn" type="submit">Save individual triage</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            {% if run_state.scan_mode == 'full' %}
+                <p>No valid or derivable InChIKeys were found in the complete scan.</p>
+            {% else %}
+                <p>No Web Findings were updated since the previous completed scan. Use “Full scan of all Web Findings” to rebuild the complete preview.</p>
+            {% endif %}
+        {% endif %}
+
+        <h2>Prospective parent Structure rows</h2>
+        <p>Showing up to 100 unique parent structures. Download the JSONL for the complete parent set.</p>
+        {% if parent_records %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th scope="col">Parent InChIKey</th>
+                            <th scope="col">Formula</th>
+                            <th scope="col">SMILES</th>
+                            <th scope="col">Database status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for parent in parent_records %}
+                            <tr style="border-top: 1px solid var(--border-color);">
+                                <td><code>{{ parent.inchikey }}</code></td>
+                                <td>{{ parent.molecular_formula|default:"—" }}</td>
+                                <td><code>{{ parent.isomeric_smiles|default:"—" }}</code></td>
+                                <td>
+                                    {% if parent.already_in_structure_database %}
+                                        Already exists
+                                    {% else %}
+                                        New preview row
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No parent structures were generated.</p>
+        {% endif %}
+
+        <h2>Prospective StructureEvidence rows</h2>
+        <p>Showing up to 100 finding-to-structure links here. The JSONL download contains every link.</p>
+        {% if evidence_records %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th scope="col">Structure InChIKey</th>
+                            <th scope="col">WebFinding</th>
+                            <th scope="col">Provider</th>
+                            <th scope="col">Assessment</th>
+                            <th scope="col">Reported values</th>
+                            <th scope="col">Validation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for evidence in evidence_records %}
+                            <tr style="border-top: 1px solid var(--border-color);">
+                                <td><code>{{ evidence.structure_inchikey }}</code></td>
+                                <td><code>{{ evidence.web_finding_id }}</code></td>
+                                <td>{{ evidence.provider_code }}</td>
+                                <td>{{ evidence.assessment }}</td>
+                                <td><pre>{{ evidence.reported_values|pprint }}</pre></td>
+                                <td><pre>{{ evidence.validation|pprint }}</pre></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No prospective finding-to-structure evidence rows.</p>
+        {% endif %}
+
+        {% if invalid_records %}
+            <h2>Rejected finding sample</h2>
+            <p>Showing up to 50 rejected findings; download the report for the full list.</p>
+            <ul>
+                {% for record in invalid_records %}
+                    <li>
+                        {{ record.provider_code }} — {{ record.reason }}
+                        (finding {{ record.finding_id }})
+                        {% if record.error %}: {{ record.error }}{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        </details>
+        {% endif %}
+    {% endif %}
+
+    {% if not run_state.batch_id %}
+    {% if run_state.status == 'COMPLETED' or run_state.status == 'FAILED' %}
+        <form method="post" style="margin: 20px 0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_preview">
+            <input type="hidden" name="run_id" value="{{ run_id }}">
+            <button type="submit" class="btn"
+                onclick="return confirm('Delete this temporary scan data? The incremental checkpoint will be kept.');">
+                Delete temporary scan data
+            </button>
+        </form>
+    {% endif %}
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block script %}
+{% if run_state.status == 'QUEUED' or run_state.status == 'RUNNING' or run_state.status == 'FINALIZING' %}
+<script>
+    (() => {
+        const statusPanel = document.getElementById('scan-status');
+        const statusUrl = statusPanel.dataset.statusUrl;
+        const stateLabel = document.getElementById('scan-state');
+        const processedLabel = document.getElementById('processed-count');
+        const progress = document.getElementById('scan-progress');
+
+        const refreshStatus = async () => {
+            try {
+                const response = await fetch(statusUrl, {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                });
+                if (!response.ok) {
+                    throw new Error(`Status request failed (${response.status}).`);
+                }
+                const data = await response.json();
+                const state = data.state;
+                stateLabel.textContent = state.status;
+                processedLabel.textContent = state.processed_findings;
+                if (state.total_findings !== null) {
+                    progress.max = state.total_findings;
+                }
+                progress.value = state.processed_findings;
+                if (state.status === 'COMPLETED' || state.status === 'FAILED') {
+                    window.location.reload();
+                }
+            } catch (error) {
+                stateLabel.textContent = error.message;
+            }
+        };
+
+        window.setInterval(refreshStatus, 3000);
+    })();
+</script>
+{% endif %}
+{% if run_state.commit_job.status == 'QUEUED' or run_state.commit_job.status == 'RUNNING' %}
+<script>
+    (() => {
+        const panel = document.getElementById('commit-panel');
+        const statusUrl = `${panel.dataset.statusUrl}?state_only=1`;
+        const stageLabel = document.getElementById('commit-stage');
+        const progress = document.getElementById('commit-progress');
+        const countLabel = document.getElementById('commit-count');
+
+        const refreshCommit = async () => {
+            try {
+                const response = await fetch(statusUrl, {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                });
+                if (!response.ok) {
+                    throw new Error(`Status request failed (${response.status}).`);
+                }
+                const {state} = await response.json();
+                const job = state.commit_job || {};
+                if (job.status !== 'QUEUED' && job.status !== 'RUNNING') {
+                    window.location.reload();
+                    return;
+                }
+                const commitProgress = state.commit_progress || {};
+                stageLabel.textContent = commitProgress.stage || 'Queued';
+                progress.max = commitProgress.total || 1;
+                progress.value = commitProgress.total ? commitProgress.completed : 0;
+                countLabel.textContent = commitProgress.total
+                    ? `${commitProgress.completed} of ${commitProgress.total}`
+                    : '';
+            } catch (error) {
+                stageLabel.textContent = error.message;
+            }
+        };
+
+        window.setInterval(refreshCommit, 2000);
+    })();
+</script>
+{% endif %}
+{% endblock %}

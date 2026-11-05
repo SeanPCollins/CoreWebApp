@@ -1,0 +1,185 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - Map Chemical Columns{% endblock %}
+
+{% block style %}
+<style>
+    .lookup-intro { max-width: 760px; color: var(--text-muted); line-height: 1.6; }
+    .lookup-steps { display: flex; gap: 10px; margin: 24px 0; padding: 0; list-style: none; }
+    .lookup-steps li { flex: 1; padding: 11px 14px; border: 1px solid var(--border-color); border-radius: var(--radius); color: var(--text-muted); background: #f8fafc; font-size: .9rem; }
+    .lookup-steps .active { border-color: #99f6e4; color: #115e59; background: #f0fdfa; font-weight: 700; }
+    .lookup-card { margin: 20px 0; padding: 22px; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; }
+    .lookup-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+    .lookup-card > p { margin: 0 0 16px; color: var(--text-muted); line-height: 1.5; }
+    .lookup-table-wrap { overflow-x: auto; }
+    .lookup-table { width: 100%; border-collapse: collapse; }
+    .lookup-table th, .lookup-table td { padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: top; }
+    .lookup-table thead th { color: var(--text-muted); font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; }
+    .lookup-table tbody th { color: var(--text-heading); font-weight: 600; }
+    .lookup-table select { min-width: 220px; max-width: 100%; padding: 9px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: var(--text-main); }
+    .lookup-samples { display: grid; gap: 5px; max-width: 480px; }
+    .lookup-samples code { overflow-wrap: anywhere; color: #334155; font-size: .83rem; }
+    .lookup-hint { margin: 18px 0; padding: 13px 16px; border-left: 4px solid var(--accent); border-radius: 6px; background: #f0fdfa; color: #115e59; line-height: 1.55; }
+    .lookup-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+    .lookup-option { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border: 1px solid var(--border-color); border-radius: 8px; }
+    .lookup-option input { margin-top: 3px; accent-color: var(--accent); }
+    .lookup-format { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; padding: 18px 20px; border: 1px solid var(--border-color); border-radius: 10px; }
+    .lookup-format legend { padding: 0 6px; color: var(--text-heading); font-weight: 700; }
+    .lookup-format label { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 7px; }
+    .lookup-format input { accent-color: var(--accent); }
+    .lookup-select { width: min(100%, 420px); padding: 9px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: var(--text-main); }
+    .lookup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .lookup-actions .btn { padding: 12px 18px; }
+    @media (max-width: 640px) {
+        .lookup-steps li { padding: 9px 7px; text-align: center; font-size: .78rem; }
+        .lookup-card { padding: 16px; }
+        .lookup-table th, .lookup-table td { padding: 9px 7px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Review your input</h1>
+<p class="lookup-intro">
+    Choose which columns CORE should search and what to include in your report.
+    Your original rows are preserved, including rows CORE cannot match. Unmatched
+    inputs are sent to the administrator review queue; no provider searches are
+    created until an administrator accepts them.
+</p>
+
+<ol class="lookup-steps" aria-label="Lookup steps">
+    <li>1. Add chemicals</li>
+    <li class="active" aria-current="step">2. Map columns</li>
+    <li>3. Download report</li>
+</ol>
+
+<div class="lookup-hint">
+    The report recommends a structure when possible, keeps alternatives visible,
+    and summarizes reviewed provider findings that support or disagree with it.
+    Parent InChIKey is included when available.
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="stats-box" role="alert">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <section class="lookup-card">
+        <h2>Match your columns</h2>
+        <p>Choose the best description for each column. Leave notes or unrelated columns ignored.</p>
+        <div class="lookup-table-wrap">
+            <table class="lookup-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Input column</th>
+                        <th scope="col">Treat values as</th>
+                        <th scope="col">Sample values</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for column in columns %}
+                    <tr>
+                        <th scope="row">{{ column.header }}</th>
+                        <td>
+                            <select name="column_{{ column.index }}" aria-label="Map {{ column.header }}">
+                                {% for value, label in identifier_types %}
+                                    <option value="{{ value }}"
+                                        {% if value == column.selected_type %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            <div class="lookup-samples">
+                                {% for sample in column.samples %}
+                                    <code>{{ sample }}</code>
+                                {% endfor %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="lookup-card">
+        <h2>Choose report data</h2>
+        <p>Your original inputs and resolution summary are always included. Select at least one data section.</p>
+        <div class="lookup-options">
+            {% for value, label in section_options %}
+                <label class="lookup-option">
+                    <input type="checkbox" name="data_sections" value="{{ value }}"
+                        {% if value in selected_sections %}checked{% endif %}>
+                    <span>{{ label }}</span>
+                </label>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="lookup-card">
+        <h2>Optional: collapse duplicate structures</h2>
+        <p>
+            Collapse rows that resolve to the same exact structure or parent structure.
+            Every original row remains available in the lineage output. Parent collapse
+            can combine salts or stereochemical variants.
+        </p>
+        <label for="collapse_mode" style="display: block; font-weight: 600; margin-bottom: 7px;">
+            Group rows by
+        </label>
+        <select id="collapse_mode" name="collapse_mode" class="lookup-select">
+            <option value="" {% if not selected_collapse_mode %}selected{% endif %}>
+                Do not collapse rows
+            </option>
+            <option value="exact" {% if selected_collapse_mode == 'exact' %}selected{% endif %}>
+                Exact structure (recommended InChIKey)
+            </option>
+            <option value="parent" {% if selected_collapse_mode == 'parent' %}selected{% endif %}>
+                Parent structure (parent InChIKey)
+            </option>
+        </select>
+
+        <label for="source_list_column" style="display: block; font-weight: 600; margin: 18px 0 7px;">
+            Column identifying the source list (optional)
+        </label>
+        <select id="source_list_column" name="source_list_column" class="lookup-select">
+            <option value="">No source-list column</option>
+            {% for column in columns %}
+                <option value="{{ column.index }}"
+                    {% if selected_source_list_column == column.index|stringformat:"s" %}selected{% endif %}>
+                    {{ column.header }}
+                </option>
+            {% endfor %}
+        </select>
+        <p style="margin-top: 8px;">
+            When collapsed, Excel includes a results sheet and a row-lineage sheet.
+            CSV produces a ZIP containing separate collapsed-results and lineage CSVs.
+            If the lists were stacked without a source label column, add one before
+            upload to identify each source; otherwise rows are labeled “Input file.”
+        </p>
+    </section>
+
+    <fieldset class="lookup-format">
+        <legend>Choose a download format</legend>
+        <label>
+            <input type="radio" name="file_format" value="xlsx"
+                {% if selected_format == 'xlsx' %}checked{% endif %} required>
+            Excel workbook (.xlsx)
+        </label>
+        <label>
+            <input type="radio" name="file_format" value="csv"
+                {% if selected_format == 'csv' %}checked{% endif %} required>
+            CSV (.csv; collapsed downloads include both CSVs in a ZIP)
+        </label>
+    </fieldset>
+
+    <div class="lookup-actions">
+        <button class="btn" type="submit">Resolve and download report</button>
+        <a href="{% url 'search' %}" class="btn btn-secondary">Start over</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - Staff Instructions{% endblock %}
+
+{% block content %}
+<main style="max-width: 1000px; margin: 32px auto; padding: 28px; color: var(--text-main);">
+    <header style="margin-bottom: 30px;">
+        <h1 style="color: var(--text-heading); margin: 0 0 12px;">Staff instructions</h1>
+        <p style="font-size: 1.05rem; line-height: 1.7; color: var(--text-muted); margin: 0;">
+            Use these tools to import chemical datasets, collect information from
+            configured providers, and review structure findings. These steps are separate:
+            importing a dataset creates source records and lookup work, while structure
+            curation is where reviewed structures and supporting evidence are committed.
+        </p>
+    </header>
+
+    <section aria-labelledby="import-heading" style="margin: 24px 0;">
+        <h2 id="import-heading" style="color: var(--text-heading);">1. Import a dataset</h2>
+        <ol style="line-height: 1.8; padding-left: 22px;">
+            <li>Open <a href="{% url 'import_upload' %}">Import Data</a> and upload a CSV or Excel file.</li>
+            <li>Map the spreadsheet columns to their meaning, such as identifier, name, or structure, then continue to the staged preview.</li>
+            <li>Review the staged rows and any identifier warnings. Confirm and queue the import when ready.</li>
+            <li>Use the import status page to watch progress. It shows staged rows, imported rows, and any reported error. Large files are processed in the background.</li>
+        </ol>
+        <p style="line-height: 1.7; color: var(--text-muted);">
+            A successful import retains the original input rows and creates or reuses
+            searchable terms. It also queues compatible lookup jobs for active providers.
+            It does not automatically add reviewed Structure records.
+        </p>
+    </section>
+
+    <section aria-labelledby="gather-heading" style="margin: 24px 0;">
+        <h2 id="gather-heading" style="color: var(--text-heading);">2. Gather information from providers</h2>
+        <ol style="line-height: 1.8; padding-left: 22px;">
+            <li>Open <a href="{% url 'data_gathering' %}">Data Gathering</a> and choose one or more active providers.</li>
+            <li>Set <strong>Tasks per batch</strong> to control each chunk, and <strong>Maximum tasks</strong> to cap the total work for each selected provider. Leaving the cap blank allows all eligible work for the selected providers.</li>
+            <li>Choose a run time and, if useful, schedule the run for later. Runs continue in the background and pause between batches.</li>
+            <li>Monitor provider queues, active runs, recent results, and errors on the dashboard. Runs can be paused and resumed. A provider with an active run is skipped when scheduling another run.</li>
+        </ol>
+        <p style="line-height: 1.7; color: var(--text-muted);">
+            Providers have different response times, access rules, and rate limits. Start
+            with bounded runs and review results before increasing the cap. A rate-limit
+            response may delay or pause a run. ChemSpider detail requests normally need
+            at least 50 eligible IDs in a batch; its small-batch override may use additional
+            API quota.
+        </p>
+    </section>
+
+    <section aria-labelledby="curation-heading" style="margin: 24px 0;">
+        <h2 id="curation-heading" style="color: var(--text-heading);">3. Review structure findings</h2>
+        <ol style="line-height: 1.8; padding-left: 22px;">
+            <li>Open <a href="{% url 'structure_curation' %}">Structure Curation</a> after provider findings are available.</li>
+            <li>Start a random batch to work through a manageable saved sample, or use the full scan to process all currently pending findings. Unselected findings remain available for later batches.</li>
+            <li>Review records flagged for missing or conflicting structure information. Expand the issue details to see the relevant reported values and evidence. Edit affected fields when appropriate.</li>
+            <li>Accept records to commit their structures and evidence. Use Needs work for records to revisit in the saved batch. Reject removes a finding from that review queue but does not delete the underlying provider finding.</li>
+        </ol>
+        <p style="line-height: 1.7; color: var(--text-muted);">
+            Accepted structures are committed to the database; leaving other records
+            untouched does not accept or discard them. Multi-fragment records retain the
+            full structure and non-trivial components. The current parent-generation
+            policy uses the largest cleaned organic fragment as the parent.
+        </p>
+    </section>
+
+    <section aria-labelledby="links-heading" style="margin-top: 32px; padding: 18px; background: var(--bg-body); border: 1px solid var(--border-color); border-radius: var(--radius);">
+        <h2 id="links-heading" style="margin-top: 0; color: var(--text-heading);">Staff tools</h2>
+        <ul style="display: flex; flex-wrap: wrap; gap: 12px 24px; line-height: 1.7; padding-left: 22px; margin-bottom: 0;">
+            <li><a href="{% url 'import_upload' %}">Import Data</a></li>
+            <li><a href="{% url 'data_gathering' %}">Data Gathering</a></li>
+            <li><a href="{% url 'structure_curation' %}">Structure Curation</a></li>
+            <li><a href="{% url 'admin:index' %}">Django admin</a></li>
+        </ul>
+    </section>
+</main>
+{% endblock %}

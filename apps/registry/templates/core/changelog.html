@@ -1,0 +1,30 @@
+{% extends 'core/base.html' %}
+
+{% block title %}CORE - Changelog{% endblock %}
+
+{% block content %}
+    <h2>System Changelog</h2>
+    <p style="color: var(--text-muted); margin-bottom: 24px;">Track development milestones, architectural updates, and release notes for CORE.</p>
+    
+    <hr style="border: none; border-top: 1px solid var(--border-color); margin-bottom: 28px;">
+
+    <div style="margin-bottom: 32px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+            <h3 style="color: var(--text-heading); margin: 0; font-size: 1.25rem;">
+                v0.1.0 — Architecture & Shell Foundation
+            </h3>
+            <span style="background: #f0fdfa; color: #0d9488; border: 1px solid #ccfbf1; font-size: 0.8rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;">
+                Current Build
+            </span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin-top: 0; margin-bottom: 16px;">Released: October 2026</p>
+        
+        <ul style="color: var(--text-main); line-height: 1.7; padding-left: 20px;">
+            <li><strong>Blank Slate Refactoring:</strong> Completely stripped legacy EDiT endocrine database queries, model dependencies, and CSV import logic in favor of a clean CORE registry foundation.</li>
+            <li><strong>Visual Identity Overhaul:</strong> Re-designed global aesthetics around a modern Slate & Teal palette, high-contrast dark navbar, and low-strain off-white workspace.</li>
+            <li><strong>Dynamic Subpath Routing:</strong> Environment-aware URL routing via <code>BASE_APP_URL</code> supporting dynamic deployment (e.g., <code>/core-dev/</code>) across Gunicorn and Nginx reverse proxies.</li>
+            <li><strong>Authentication Pipeline:</strong> User registration, tokenized email activation workflow, and real-time AJAX username/email availability checking API.</li>
+            <li><strong>Interactive Shell Skeleton:</strong> Standardized multi-page base template (<code>core/base.html</code>) with user-aware navigation and placeholder views for upcoming chemical data models.</li>
+        </ul>
+    </div>
+{% endblock %}

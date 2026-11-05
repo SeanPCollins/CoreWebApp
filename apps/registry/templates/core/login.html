@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+{% block title %}CORE - Log In{% endblock %}
+{% block content %}
+<h2>Log In</h2>
+
+{% if form.errors %}
+  <div style="background-color: #fed7d7; color: #c53030; padding: 12px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #feb2b2;">
+    Your username and password didn't match. Please try again.
+  </div>
+{% endif %}
+
+<form method="post" style="max-width:400px;">
+  {% csrf_token %}
+  <div style="margin-bottom: 15px;">
+    <label for="id_username" style="display:block; margin-bottom:5px; font-weight:500;">Username:</label>
+    {{ form.username }}
+  </div>
+  <div style="margin-bottom: 20px;">
+    <label for="id_password" style="display:block; margin-bottom:5px; font-weight:500;">Password:</label>
+    {{ form.password }}
+  </div>
+  <button type="submit" class="btn">Log In</button>
+</form>
+
+<p style="margin-top: 20px; font-size: 0.9rem;">
+  <a href="{% url 'password_reset' %}" style="color: #3182ce;">Forgot your password?</a>
+</p>
+<p style="margin-top: 20px; font-size: 0.9rem;">
+  Don't have an account? <a href="{% url 'signup' %}" style="color: #3182ce;">Sign up here</a>.
+</p>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'core/base.html' %}
+{% block title %}CORE - Request Received{% endblock %}
+{% block content %}
+<div style="background-color: #c6f6d5; color: #22543d; padding: 20px; border-radius: 4px; border: 1px solid #9ae6b4; margin-bottom: 20px;">
+    <h2>Account request submitted</h2>
+    <p>Your request has been sent to the administrator for review. Please wait while your account is verified. We’ll let you know by email when it has been approved.</p>
+</div>
+<a href="{% url 'home' %}" class="btn">Return to Home</a>
+{% endblock %}

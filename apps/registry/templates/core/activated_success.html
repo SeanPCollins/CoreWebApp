@@ -1,0 +1,17 @@
+{% extends 'core/base.html' %}
+{% block title %}CORE - Account Activated{% endblock %}
+{% block content %}
+<div style="background-color: #ebf8ff; color: #2b6cb0; padding: 20px; border-radius: 4px; border: 1px solid #bee3f8; margin-bottom: 20px;">
+    <h2>Account Successfully Activated!</h2>
+    <p><strong>{{ user.username }}</strong> ({{ user.email }}) is now active.</p>
+</div>
+
+<h3>Ready-to-use Email Reply Blurb:</h3>
+<p style="font-size: 0.9rem; color: #4a5568;">Copy and paste this text into your email reply to the user:</p>
+<textarea class="form-control" rows="8" style="width: 100%; font-family: monospace; padding: 10px;" readonly>{{ reply_blurb }}</textarea>
+
+<div style="margin-top: 20px;">
+    <a href="{{ login_url }}" class="btn">Open Login Page</a>
+    <a href="{% url 'home' %}" class="btn">Return to Home</a>
+</div>
+{% endblock %}

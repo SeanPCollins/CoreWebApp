@@ -1,0 +1,187 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div style="max-width: 1300px; margin: 40px auto; padding: 32px; background: #fff; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+
+    <div style="border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #16a34a; letter-spacing: 0.05em;">Step 3 of 4</span>
+            <h2 style="margin: 4px 0 8px 0; font-size: 1.5rem; color: #1e293b;">Staging Preview & Triage</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin: 0;">Review parsed rows, check CAS warnings, and commit your batch.</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <div style="background: #f8fafc; padding: 8px 14px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center;">
+                <span style="display: block; font-size: 0.75rem; color: #64748b; font-weight: 600;">TOTAL ROWS</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #0f172a;">{{ total_rows }}</span>
+            </div>
+            <div style="background: #f0fdf4; padding: 8px 14px; border-radius: 6px; border: 1px solid #bbf7d0; text-align: center;">
+                <span style="display: block; font-size: 0.75rem; color: #16a34a; font-weight: 600;">NEW</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #16a34a;">{{ new_count }}</span>
+            </div>
+            <div style="background: #fefce8; padding: 8px 14px; border-radius: 6px; border: 1px solid #fef08a; text-align: center;">
+                <span style="display: block; font-size: 0.75rem; color: #ca8a04; font-weight: 600;">ALREADY IN DB</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #ca8a04;">{{ existing_count }}</span>
+            </div>
+            <!-- NEW: Issues / Invalid Card -->
+            <div style="background: {% if invalid_count > 0 %}#fef2f2{% else %}#f8fafc{% endif %}; padding: 8px 14px; border-radius: 6px; border: 1px solid {% if invalid_count > 0 %}#fca5a5{% else %}#e2e8f0{% endif %}; text-align: center;">
+                <span style="display: block; font-size: 0.75rem; color: {% if invalid_count > 0 %}#dc2626{% else %}#64748b{% endif %}; font-weight: 600;">ISSUES FOUND</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: {% if invalid_count > 0 %}#dc2626{% else %}#0f172a{% endif %};">{{ invalid_count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Definition note for what INVALID means -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; color: #475569;">
+        <strong style="color: #0f172a;">Review guide</strong>
+        <span style="margin-left: 8px;">
+            Suggested CAS corrections are shown for review. “Needs review” counts rows
+            that could not be validated automatically.
+        </span>
+    </div>
+
+    <form id="commit-import-form"
+        method="POST"
+        action="{% url 'import_commit' source_import.id %}"
+        style="display: flex; flex-wrap: wrap; align-items: end; gap: 16px; justify-content: space-between; background: #f8fafc; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 20px;">
+        {% csrf_token %}
+
+        <div style="flex: 1 1 320px;">
+            <label for="group_name" style="display: block; font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                List name <span style="font-weight: 400; color: #64748b;">(optional)</span>
+            </label>
+            <input type="text"
+                name="group_name"
+                id="group_name"
+                placeholder="e.g., TSCA Active"
+                style="width: 100%; max-width: 440px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+        </div>
+
+        <button type="submit"
+                style="background: #16a34a; color: white; border: none; padding: 11px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+            Confirm and queue import
+        </button>
+    </form>
+
+    <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+            <thead>
+                <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">
+                    <th style="padding: 12px; width: 70px;">Row</th>
+                    <th style="padding: 12px; width: 300px;">Primary Identifier</th>
+                    <th style="padding: 12px; width: 140px;">Structure Anchor</th>
+                    <th style="padding: 12px;">Mapped Attributes Preview</th>
+                    <th style="padding: 12px; width: 140px; text-align: center;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in staged_rows %}
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 12px; font-weight: bold; color: #64748b;">#{{ row.row_index }}</td>
+                    <td style="padding: 12px;">
+                        <span style="display: block; font-weight: 600; color: #0f172a; font-family: monospace;">{{ row.primary_id }}</span>
+
+                        {% if row.has_cas_warning %}
+                        <details style="margin-top: 6px; font-size: 0.8rem;">
+                            <summary style="cursor: pointer; color: #b45309; font-weight: 600;">
+                                ⚠️ Review CAS
+                            </summary>
+                            <div style="margin-top: 6px; padding: 8px; border-left: 2px solid #f59e0b;">
+                                <span style="color: #b45309; font-weight: 600; display: block; margin-bottom: 4px;">
+                                    ⚠️ {{ row.cas_validation.note }}
+                                </span>
+
+                                <label style="display: block; color: #334155; margin-bottom: 2px; font-weight: 500;">
+                                    CAS number selection:
+                                </label>
+
+                                <select onchange="handleCasChange(this, {{ row.row_index }})"
+                                        style="width: 100%; padding: 4px 6px; border: 1px solid #d97706; border-radius: 4px; background: #fff; font-family: monospace; font-size: 0.8rem; margin-bottom: 4px; color: #0f172a;">
+                                    {% if row.cas_validation.suggestion %}
+                                    <option value="{{ row.cas_validation.suggestion }}"
+                                        {% if not row.user_resolved_cas or row.user_resolved_cas == row.cas_validation.suggestion %}selected{% endif %}>
+                                        Suggested: {{ row.cas_validation.suggestion }}
+                                    </option>
+                                    {% endif %}
+                                    <option value="{{ row.cas_validation.original }}"
+                                        {% if row.user_resolved_cas == row.cas_validation.original %}selected{% endif %}>
+                                        Keep original: {{ row.cas_validation.original }}
+                                    </option>
+                                    <option value="CUSTOM"
+                                        {% if row.user_resolved_cas and row.user_resolved_cas != row.cas_validation.suggestion and row.user_resolved_cas != row.cas_validation.original %}selected{% endif %}>
+                                        Other (custom entry)…
+                                    </option>
+                                </select>
+
+                                <div id="custom_box_{{ row.row_index }}"
+                                    style="display: {% if row.user_resolved_cas and row.user_resolved_cas != row.cas_validation.suggestion and row.user_resolved_cas != row.cas_validation.original %}block{% else %}none{% endif %}; margin-top: 4px;">
+                                    <input type="text"
+                                        id="custom_input_{{ row.row_index }}"
+                                        value="{% if row.user_resolved_cas and row.user_resolved_cas != row.cas_validation.suggestion and row.user_resolved_cas != row.cas_validation.original %}{{ row.user_resolved_cas }}{% endif %}"
+                                        placeholder="Type correct CAS..."
+                                        onblur="saveCustomCas({{ row.row_index }})"
+                                        style="width: 100%; padding: 4px 6px; border: 1px solid #d97706; border-radius: 4px; font-family: monospace; background: #fff; box-sizing: border-box; font-size: 0.8rem;">
+                                </div>
+                            </div>
+                        </details>
+                        {% endif %}
+
+                        <span style="font-size: 0.75rem; color: #2563eb; background: #eff6ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">{{ row.primary_type }}</span>
+                    </td>
+                    <td style="padding: 12px; color: #475569;">
+                        {% if row.has_structure %}
+                        <span style="color: #16a34a; font-weight: 500;">✓ Present</span>
+                        {% else %}
+                        <span style="color: #94a3b8;">None mapped</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; color: #334155;">
+                        {% if row.attributes_summary %}
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                {% for attr in row.attributes_summary %}
+                                <span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; color: #475569;">{{ attr }}</span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span style="color: #cbd5e1;">[Identifier / Structure only]</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        {% if not row.is_valid %}
+                        <span style="background: #fee2e2; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">NEEDS REVIEW</span>
+                        {% elif row.is_existing %}
+                        <span style="background: #fef9c3; color: #ca8a04; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">EXISTING TERM</span>
+                        {% else %}
+                        <span style="background: #dcfce7; color: #16a34a; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">BRAND NEW</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" style="padding: 24px; text-align: center; color: var(--text-muted);">No rows staged.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGINATION CONTROLS -->
+    {% if page_obj.has_other_pages %}
+    <div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 24px; font-size: 0.9rem;">
+        {% if page_obj.has_previous %}
+            <a href="?page=1" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: #334155; text-decoration: none;">&laquo; First</a>
+            <a href="?page={{ page_obj.previous_page_number }}" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: #334155; text-decoration: none;">Previous</a>
+        {% endif %}
+
+        <span style="padding: 6px 12px; color: #64748b; font-weight: 500;">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: #334155; text-decoration: none;">Next</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: #334155; text-decoration: none;">Last &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
